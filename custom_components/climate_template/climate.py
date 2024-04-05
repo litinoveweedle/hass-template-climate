@@ -231,6 +231,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_preset_modes = config[CONF_PRESET_MODE_LIST]
         self._swing_modes_list = config[CONF_SWING_MODE_LIST]
 
+        self._attr_translation_key = "climate_template"
+
         self.entity_id = async_generate_entity_id(
             ENTITY_ID_FORMAT, config[CONF_NAME], hass=hass
         )

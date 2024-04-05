@@ -1,0 +1,19 @@
+{
+  "entity": {
+    "climate": {
+      "climate_template": {
+        "state_attributes": {
+          "preset_mode": {
+            "default": "mdi:thermometer-alert",
+            "state": {
+              "automatic": "mdi:thermometer-auto",
+              "comfort": "mdi:thermometer-high",
+              "reduced": "mdi:thermometer",
+              "protection": "mdi:snowflake-thermometer"
+            }
+          }
+        }
+      }
+    }
+  }
+}
