@@ -1,7 +1,7 @@
 {
-    "python.analysis.extraPaths": ["/home/litin/Documents/SW/core"],
+    "python.analysis.extraPaths": ["/home/litin/Documents/SW/homeassistant"],
     "terminal.integrated.env.linux": {
-        "PYTHONPATH": "../core;${env:PYTHONPATH}",
-        "PATH": "../core;${env:PATH}"
+        "PYTHONPATH": "../homeassistant;${env:PYTHONPATH}",
+        "PATH": "../homeassistant;${env:PATH}"
     }
 }

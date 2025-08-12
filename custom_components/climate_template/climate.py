@@ -10,6 +10,7 @@ from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
     ENTITY_ID_FORMAT,
+    DOMAIN as CLIMATE_DOMAIN,
 )
 from homeassistant.components.climate.const import (
     DEFAULT_MAX_TEMP,
@@ -44,21 +45,23 @@ from homeassistant.components.climate.const import (
     HVACAction,
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
-from homeassistant.components.template.template_entity import TemplateEntity
+from homeassistant.components.template.helpers import async_setup_template_platform
+from homeassistant.components.template.template_entity import (
+    TemplateEntity,
+    TEMPLATE_ENTITY_COMMON_SCHEMA,
+)
 from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
     ATTR_TEMPERATURE,
-    CONF_NAME,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
     CONF_ICON_TEMPLATE,
     CONF_ENTITY_PICTURE_TEMPLATE,
-    CONF_UNIQUE_ID,
 )
-from homeassistant.helpers.entity import async_generate_entity_id
+from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType
@@ -117,6 +120,7 @@ DEFAULT_MODE_ACTION = "single"
 DEFAULT_MAX_ACTION = 1
 DEFAULT_PRESETS_FEATURES = 0
 DOMAIN = "climate_template"
+PLATFORMS = ["climate"]
 
 
 class ClimateEntityPresetFeature(IntFlag):
@@ -133,9 +137,9 @@ class ClimateEntityPresetFeature(IntFlag):
 
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
+    TEMPLATE_ENTITY_COMMON_SCHEMA.schema
+).extend(
     {
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_UNIQUE_ID): cv.string,
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
         vol.Optional(CONF_ICON_TEMPLATE): cv.template,
         vol.Optional(CONF_ENTITY_PICTURE_TEMPLATE): cv.template,
@@ -195,30 +199,30 @@ async def async_setup_platform(
     hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
 ):
     """Set up the Template Climate."""
-    async_add_entities([TemplateClimate(hass, config)])
-
+    await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
+    await async_setup_template_platform(
+        hass,
+        CLIMATE_DOMAIN,
+        config,
+        TemplateClimate,
+        None,
+        async_add_entities,
+        discovery_info,
+        {},
+    )
 
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
     _attr_should_poll = False
+    _entity_id_format = ENTITY_ID_FORMAT
+    _enable_turn_on_off_backwards_compatibility = False
 
-    def __init__(self, hass: HomeAssistant, config: ConfigType):
+    def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
         """Initialize the climate device."""
-        super().__init__(
-            hass,
-            availability_template=config.get(CONF_AVAILABILITY_TEMPLATE),
-            icon_template=config.get(CONF_ICON_TEMPLATE),
-            entity_picture_template=config.get(CONF_ENTITY_PICTURE_TEMPLATE),
-        )
+        super().__init__(hass, config, unique_id)
         self._config = config
-        self._enable_turn_on_off_backwards_compatibility = False
 
-        self._attr_name = config[CONF_NAME]
-        self._attr_entity_id = async_generate_entity_id(
-            ENTITY_ID_FORMAT, config[CONF_NAME], hass=hass
-        )
-        self._attr_unique_id = config.get(CONF_UNIQUE_ID, None)
         self._attr_supported_features = 0
         self._attr_temperature_unit = hass.config.units.temperature_unit
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
@@ -1450,7 +1454,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 action,
                 variables,
             )
-            await script.async_run(
+#            await script.async_run(
+#                run_variables=variables,
+#                context=script_context,
+#            )
+            await self.async_run_script(
+                script,
                 run_variables=variables,
                 context=script_context,
             )
@@ -1471,7 +1480,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_name,
                 variables,
             )
-            await self._script_presets.async_run(
+#            await self._script_presets.async_run(
+#                run_variables=variables,
+#                context=script_context,
+#            )
+            await self.async_run_script(
+                script,
                 run_variables=variables,
                 context=script_context,
             )
