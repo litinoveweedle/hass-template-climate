@@ -1454,10 +1454,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 action,
                 variables,
             )
-#            await script.async_run(
-#                run_variables=variables,
-#                context=script_context,
-#            )
             await self.async_run_script(
                 script,
                 run_variables=variables,
@@ -1480,10 +1476,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_name,
                 variables,
             )
-#            await self._script_presets.async_run(
-#                run_variables=variables,
-#                context=script_context,
-#            )
             await self.async_run_script(
                 script,
                 run_variables=variables,
