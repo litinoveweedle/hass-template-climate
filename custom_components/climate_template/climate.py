@@ -211,6 +211,7 @@ async def async_setup_platform(
         {},
     )
 
+
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     """A template climate component."""
 
