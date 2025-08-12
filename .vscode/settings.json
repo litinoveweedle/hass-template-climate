@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": ["/home/litin/Documents/SW/core"],
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "../core;${env:PYTHONPATH}",
+        "PATH": "../core;${env:PATH}"
+    }
+}
