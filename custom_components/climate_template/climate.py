@@ -46,10 +46,8 @@ from homeassistant.components.climate.const import (
 )
 from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
 from homeassistant.components.template.helpers import async_setup_template_platform
-from homeassistant.components.template.template_entity import (
-    TemplateEntity,
-    TEMPLATE_ENTITY_COMMON_SCHEMA,
-)
+from homeassistant.components.template.schemas import make_template_entity_base_schema
+from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
     PRECISION_HALVES,
@@ -137,7 +135,7 @@ class ClimateEntityPresetFeature(IntFlag):
 
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    TEMPLATE_ENTITY_COMMON_SCHEMA.schema
+    make_template_entity_base_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema
 ).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
@@ -1426,7 +1424,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     and attributes[attr]["value"] != self._off_mode[attr]
                 ):
                     self._last_on_mode[attr] = attributes[attr]["value"]
-                # Set script varaible
+                # Set script variable
                 variables[attributes[attr]["attr"]] = attributes[attr]["value"]
                 # Update presets if defined.
                 if (
