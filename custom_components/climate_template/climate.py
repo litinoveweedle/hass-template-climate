@@ -56,6 +56,7 @@ from homeassistant.const import (
     ATTR_TEMPERATURE,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
+    CONF_AVAILABILITY,
     CONF_ICON_TEMPLATE,
     CONF_ENTITY_PICTURE_TEMPLATE,
 )
@@ -219,6 +220,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
         """Initialize the climate device."""
+        # Map legacy availability_template to availability so TemplateEntity picks it up.
+        if CONF_AVAILABILITY_TEMPLATE in config and CONF_AVAILABILITY not in config:
+            config = {**config, CONF_AVAILABILITY: config[CONF_AVAILABILITY_TEMPLATE]}
         super().__init__(hass, config, unique_id)
         self._config = config
 
