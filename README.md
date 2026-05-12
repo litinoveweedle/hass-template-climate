@@ -201,9 +201,9 @@ climate:
           hvac_mode: "{{ states('climate.bedroom_ac_template') }}"
 ```
 
-### Example: preset modes (simple — original jcwillox approach)
+### Example: preset modes
 
-Preset modes can be used as simple named states forwarded to your device, without the profile storage introduced in this fork. This is the original intended usage: `preset_modes` lists the available presets, `preset_mode_template` reads the current preset from the device, and `set_preset_mode` sends the selection back. No `presets_features`, `presets_template`, or `set_presets` are required.
+Preset modes can be used as simple named states forwarded to your device.
 
 ```yaml
 climate:
