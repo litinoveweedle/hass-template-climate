@@ -161,6 +161,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_PRESETS_ACTION): cv.SCRIPT_SCHEMA,
+        vol.Optional("modes"): cv.ensure_list,  # Deprecated: use hvac_modes
         vol.Optional(
             CONF_HVAC_MODE_LIST, default=DEFAULT_HVAC_MODE_LIST
         ): cv.ensure_list,
@@ -220,6 +221,13 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
         """Initialize the climate device."""
+        # Map deprecated 'modes' to 'hvac_modes' for backwards compatibility with jcwillox configs.
+        if "modes" in config and CONF_HVAC_MODE_LIST not in config:
+            _LOGGER.warning(
+                "climate_template: Config key 'modes' is deprecated and will be removed "
+                "in a future release. Please rename it to 'hvac_modes'."
+            )
+            config = {**config, CONF_HVAC_MODE_LIST: config["modes"]}
         # Map legacy availability_template to availability so TemplateEntity picks it up.
         if CONF_AVAILABILITY_TEMPLATE in config and CONF_AVAILABILITY not in config:
             config = {**config, CONF_AVAILABILITY: config[CONF_AVAILABILITY_TEMPLATE]}
