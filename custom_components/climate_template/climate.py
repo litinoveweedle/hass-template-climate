@@ -56,10 +56,11 @@ from homeassistant.const import (
     ATTR_TEMPERATURE,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
-    CONF_AVAILABILITY,
     CONF_ICON_TEMPLATE,
     CONF_ENTITY_PICTURE_TEMPLATE,
 )
+
+CONF_AVAILABILITY = "availability"
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
