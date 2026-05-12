@@ -78,6 +78,7 @@ CONF_HUMIDITY_MIN = "min_humidity"
 CONF_HUMIDITY_MAX = "max_humidity"
 CONF_PRECISION = "precision"
 CONF_TEMP_STEP = "temp_step"
+CONF_TEMP_STEP_TEMPLATE = "temp_step_template"
 CONF_MODE_ACTION = "mode_action"
 CONF_MAX_ACTION = "max_action"
 CONF_PRESETS_FEATURES = "presets_features"
@@ -153,6 +154,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PRESET_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
+        vol.Optional(CONF_TEMP_STEP_TEMPLATE): cv.template,
         vol.Optional(CONF_PRESETS_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
@@ -289,6 +291,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         self._template_target_humidity = config.get(CONF_TARGET_HUMIDITY_TEMPLATE)
         self._template_presets = config.get(CONF_PRESETS_TEMPLATE)
+        self._template_temp_step = config.get(CONF_TEMP_STEP_TEMPLATE)
 
         self._action_hvac_mode = config.get(CONF_SET_HVAC_MODE_ACTION)
         self._action_preset_mode = config.get(CONF_SET_PRESET_MODE_ACTION)
@@ -931,6 +934,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        if self._template_temp_step:
+            self.add_template_attribute(
+                "_attr_target_temperature_step",
+                self._template_temp_step,
+                None,
+                self._update_temp_step,
+                none_on_template_error=True,
+            )
+
         _LOGGER.debug(
             "Entity '%s' succesfully registered to homeassistant.",
             self._attr_name,
@@ -1392,6 +1404,24 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
         ) is not None:
             self._attr_hvac_action = value
+
+    @callback
+    def _update_temp_step(self, temp_step):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TEMP_STEP_TEMPLATE,
+            temp_step,
+        )
+        if temp_step not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                self._attr_target_temperature_step = float(temp_step)
+            except (ValueError, TypeError):
+                _LOGGER.error(
+                    "Entity '%s' attribute 'temp_step' could not parse value: '%s'. Expected a number.",
+                    self._attr_name,
+                    temp_step,
+                )
 
     async def _async_set_attribute(self, action, attributes) -> None:
         presets = {}
