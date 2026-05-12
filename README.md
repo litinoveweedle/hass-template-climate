@@ -201,6 +201,50 @@ climate:
           hvac_mode: "{{ states('climate.bedroom_ac_template') }}"
 ```
 
+### Example: preset modes (simple — original jcwillox approach)
+
+Preset modes can be used as simple named states forwarded to your device, without the profile storage introduced in this fork. This is the original intended usage: `preset_modes` lists the available presets, `preset_mode_template` reads the current preset from the device, and `set_preset_mode` sends the selection back. No `presets_features`, `presets_template`, or `set_presets` are required.
+
+```yaml
+climate:
+  - platform: climate_template
+    name: Living Room Thermostat
+    hvac_modes:
+      - "off"
+      - "heat"
+    preset_modes:
+      - none
+      - eco
+      - boost
+    current_temperature_template: "{{ states('sensor.living_room_temperature') }}"
+    hvac_mode_template: "{{ states('input_select.thermostat_hvac_mode') }}"
+    preset_mode_template: "{{ states('input_select.thermostat_preset') }}"
+
+    set_hvac_mode:
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.thermostat_hvac_mode
+        data:
+          option: "{{ hvac_mode }}"
+
+    set_preset_mode:
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.thermostat_preset
+        data:
+          option: "{{ preset_mode }}"
+      # Adjust temperature setpoint when preset changes
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.thermostat_setpoint
+        data:
+          value: >
+            {% if preset_mode == 'eco' %}18
+            {% elif preset_mode == 'boost' %}23
+            {% else %}21
+            {% endif %}
+```
+
 ### Example: preset profiles for a boiler with multiple heating modes
 
 ```yaml
