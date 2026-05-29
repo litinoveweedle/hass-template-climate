@@ -546,41 +546,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._presets_features ^= ClimateEntityPresetFeature.TARGET_TEMPERATURE
 
-        if HVACMode.DRY in self._attr_hvac_modes:
-            if (
-                self._action_humidity
-                or self._template_target_humidity
-                or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
-            ):
-                self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has hvac mode dry configured, but there is neither '%s' action, '%s' template nor preset_features.humidity configured.",
-                    self._attr_name,
-                    CONF_SET_HUMIDITY_ACTION,
-                    CONF_TARGET_HUMIDITY_TEMPLATE,
-                )
-        else:
-            if self._action_humidity:
-                _LOGGER.warning(
-                    "Entity '%s' has no hvac mode dry configured, but there is action '%s' configured.",
-                    self._attr_name,
-                    CONF_SET_HUMIDITY_ACTION,
-                )
-                self._action_humidity = None
-            if self._template_target_humidity:
-                _LOGGER.warning(
-                    "Entity '%s' has no hvac mode dry configured, but there is template '%s' configured.",
-                    self._attr_name,
-                    CONF_TARGET_HUMIDITY_TEMPLATE,
-                )
-                self._action_humidity = None
-            if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
-                _LOGGER.warning(
-                    "Entity '%s' has no hvac mode dry configured, but preset_features.target_humidity is set.",
-                    self._attr_name,
-                )
-                self._presets_features ^= ClimateEntityPresetFeature.TARGET_HUMIDITY
+        if (
+            self._action_humidity
+            or self._template_target_humidity
+            or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
+        ):
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
 
         if (
             not self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
