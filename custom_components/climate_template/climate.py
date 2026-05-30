@@ -795,12 +795,22 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 else:
                     self._presets = self._validate_presets(self._presets)
 
+    def _async_setup_templates(self) -> None:
+        """Register template attributes before HA wires up the tracker.
+
+        The modern TemplateEntity base calls this synchronously from
+        async_added_to_hass, *before* async_at_start schedules
+        _async_template_startup. When HA is already running (reload path),
+        _async_template_startup fires immediately inside super(), so every
+        add_template_attribute call must complete here — not afterward in
+        async_added_to_hass — or the tracker will be built from an empty dict
+        and templates will never re-evaluate.
+        """
         _LOGGER.debug(
             "Entity '%s' registering templates callbacks.",
             self._attr_name,
         )
 
-        # Register templates callback.
         if self._template_hvac_mode:
             self.add_template_attribute(
                 "_hvac_mode",
@@ -918,10 +928,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
-        _LOGGER.debug(
-            "Entity '%s' succesfully registered to homeassistant.",
-            self._attr_name,
-        )
+        super()._async_setup_templates()
 
     def _validate_value(self, attr, value, format):
         if value is None:
