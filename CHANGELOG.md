@@ -6,6 +6,11 @@ All notable changes across all fork generations are documented here.
 
 ## [mikopp/hass-template-climate](https://github.com/mikopp/hass-template-climate) — this fork
 
+### 2026-05-30 — Fix: all templated properties freeze after platform reload
+
+- **Author:** [@mikopp](https://github.com/mikopp)
+- **Fixed:** After a platform reload (while HA is running), all templated properties (`current_temperature_template`, `hvac_mode_template`, `hvac_action_template`, `target_temperature_template`, `current_humidity_template`, etc.) stopped updating and remained stuck at their `RestoreEntity`-restored values indefinitely. Full HA restarts were unaffected. Root cause: the modern `TemplateEntity` base (HA 2025.8+) calls `_async_setup_templates()` before wiring up the template tracker via `async_at_start`; when HA is already running, that tracker fires synchronously inside `super().async_added_to_hass()` — before the subclass had registered any templates. Fix: override `_async_setup_templates()` and move all `add_template_attribute()` calls there, so registration always precedes tracker construction.
+
 ### 2026-05-29 — Humidity control without dry HVAC mode
 
 - **Author:** [@mikopp](https://github.com/mikopp)
