@@ -1,8 +1,9 @@
 """Support for Template climates."""
 
 import logging
+
 from enum import IntFlag
-from typing import Any
+from typing import Any, TypedDict
 
 import voluptuous as vol
 
@@ -150,6 +151,18 @@ class ClimateEntityPresetFeature(IntFlag):
     TARGET_TEMPERATURE = 32
     TARGET_TEMPERATURE_RANGE = 64
     TARGET_HUMIDITY = 128
+
+
+class ClimateEntityPresetValues(TypedDict, total=False):
+    """Typed mapping for a single preset mode payload."""
+
+    hvac_mode: str
+    fan_mode: str
+    swing_mode: str
+    target_temperature: float
+    target_temperature_low: float
+    target_temperature_high: float
+    target_humidity: int
 
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
@@ -360,9 +373,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._action_presets = config.get(CONF_SET_PRESETS_ACTION)
 
         # Init private attributes
-        self._presets = {}
-        self._off_mode = {}
-        self._last_on_mode = {}
+        self._presets: dict[str, ClimateEntityPresetValues] = {}
+        self._off_mode: dict[str, str] = {}
+        self._last_on_mode: dict[str, str] = {}
         self._presets_features = config.get(CONF_PRESETS_FEATURES)
 
         # Init scripts callbacks.
@@ -1134,7 +1147,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         return value
 
-    def _validate_presets(self, presets):
+    def _validate_presets(self, presets: Any) -> dict[str, ClimateEntityPresetValues]:
         if not isinstance(presets, dict):
             _LOGGER.error(
                 "Entity '%s' attribute '%s' returned invalid type: '%s'. Expected dictionary.",
@@ -1144,7 +1157,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
             presets = {}
 
-        value = {}
+        value: dict[str, ClimateEntityPresetValues] = {}
         for mode in self._attr_preset_modes:
             if mode in presets and isinstance(presets[mode], dict) and presets[mode]:
                 if mode not in value:
@@ -1455,7 +1468,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._attr_hvac_action = value
             self.async_write_ha_state()
 
-    async def _async_set_attribute(self, action, attributes) -> None:
+    async def _async_set_attribute(
+        self, action: str, attributes: dict[str, dict[str, Any]]
+    ) -> bool:
         presets = {}
         variables = {}
         for attr in attributes:
@@ -1694,7 +1709,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperatures."""
-        attributes = {}
+        attributes: dict[str, dict[str, Any]] = {}
         if (target_temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
             attributes["target_temperature"] = {
                 "attr": ATTR_TEMPERATURE,
@@ -1722,8 +1737,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if len(attributes):
             await self._async_set_attribute("temperature", attributes)
 
-    async def async_set_presets(self, preset) -> None:
-        attributes = {}
+    async def async_set_presets(self, preset: ClimateEntityPresetValues) -> None:
+        attributes: dict[str, Any] = {}
         if any(
             attr in preset
             for attr in [
