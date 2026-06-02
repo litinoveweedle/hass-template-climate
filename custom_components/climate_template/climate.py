@@ -1,12 +1,12 @@
 """Support for Template climates."""
 
 import logging
+
+from enum import IntFlag
 from typing import Any, TypedDict
 
-import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from enum import IntFlag
-from homeassistant.core import HomeAssistant, Context, callback
+
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -45,25 +45,44 @@ from homeassistant.components.climate.const import (
     HVACMode,
     HVACAction,
 )
-from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
-from homeassistant.components.template.helpers import async_setup_template_platform
+from homeassistant.components.template.const import (
+    CONF_AVAILABILITY,
+    CONF_AVAILABILITY_TEMPLATE,
+    CONF_DEFAULT_ENTITY_ID,
+    CONF_PICTURE,
+)
+from homeassistant.components.template.helpers import (
+    async_create_template_tracking_entities,
+)
 from homeassistant.components.template.schemas import make_template_entity_base_schema
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_TEMPERATURE,
+    CONF_ENTITY_PICTURE_TEMPLATE,
+    CONF_FRIENDLY_NAME,
+    CONF_ICON,
+    CONF_ICON_TEMPLATE,
+    CONF_NAME,
+    CONF_STATE,
+    CONF_VALUE_TEMPLATE,
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
-    ATTR_TEMPERATURE,
+    STATE_OFF,
+    STATE_ON,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
-    CONF_ICON_TEMPLATE,
-    CONF_ENTITY_PICTURE_TEMPLATE,
 )
+from homeassistant.core import HomeAssistant, Context, callback
+from homeassistant.helpers import template
+import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -205,21 +224,76 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
 )
 
 
+LEGACY_FIELDS = {
+    CONF_AVAILABILITY_TEMPLATE: CONF_AVAILABILITY,
+    CONF_ENTITY_PICTURE_TEMPLATE: CONF_PICTURE,
+    CONF_FRIENDLY_NAME: CONF_NAME,
+    CONF_ICON_TEMPLATE: CONF_ICON,
+    CONF_VALUE_TEMPLATE: CONF_STATE,
+}
+
+
+def rewrite_legacy_to_modern_config(
+    hass: HomeAssistant,
+    entity_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    """Rewrite legacy config."""
+    entity_cfg = {**entity_cfg}
+
+    # Remove deprecated entity_id field from legacy syntax
+    entity_cfg.pop(ATTR_ENTITY_ID, None)
+
+    for from_key, to_key in LEGACY_FIELDS.items():
+        if from_key not in entity_cfg or to_key in entity_cfg:
+            continue
+
+        val = entity_cfg.pop(from_key)
+        if isinstance(val, str):
+            val = template.Template(val, hass)
+        entity_cfg[to_key] = val
+
+    if CONF_NAME in entity_cfg and isinstance(entity_cfg[CONF_NAME], str):
+        entity_cfg[CONF_NAME] = template.Template(entity_cfg[CONF_NAME], hass)
+
+    return entity_cfg
+
+
+def rewrite_legacy_to_modern_configs(
+    hass: HomeAssistant,
+    domain: str,
+    entity_cfg: dict[str, dict],
+) -> list[dict]:
+    """Rewrite legacy configuration definitions to modern ones."""
+    entities = []
+    for object_id, entity_conf in entity_cfg.items():
+        entity_conf = {**entity_conf, CONF_DEFAULT_ENTITY_ID: f"{domain}.{object_id}"}
+
+        entity_conf = rewrite_legacy_to_modern_config(hass, entity_conf)
+
+        if CONF_NAME not in entity_conf:
+            entity_conf[CONF_NAME] = template.Template(object_id, hass)
+
+        entities.append(entity_conf)
+
+    return entities
+
+
 async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
 ):
     """Set up the Template Climate."""
-    await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
-    await async_setup_template_platform(
-        hass,
-        CLIMATE_DOMAIN,
-        config,
-        TemplateClimate,
-        None,
-        async_add_entities,
-        discovery_info,
-        {},
-    )
+    if discovery_info is None:
+        await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
+        async_create_template_tracking_entities(
+            TemplateClimate,
+            async_add_entities,
+            hass,
+            [rewrite_legacy_to_modern_config(hass, config)],
+            None,
+        )
 
 
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
@@ -467,7 +541,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
             ):
                 _LOGGER.info(
-                    "Entity '%s' has hvac mode heat_cool configured, but there is neither '%s' action, '%s' and '%s' template nor preset_features.target_temperature_range configued.",
+                    "Entity '%s' has hvac mode heat_cool configured, but there is neither '%s' action, '%s' and '%s' template nor preset_features.target_temperature_range configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                     CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
@@ -515,7 +589,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
             else:
                 _LOGGER.warning(
-                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is neither '%s' action, '%s' template nor preset_features.target_temperature configued.",
+                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is neither '%s' action, '%s' template nor preset_features.target_temperature configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
@@ -929,7 +1003,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
 
         _LOGGER.debug(
-            "Entity '%s' succesfully registered to homeassistant.",
+            "Entity '%s' successfully registered to homeassistant.",
             self._attr_name,
         )
 
@@ -951,7 +1025,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             return None
         elif value in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.debug(
-                "Entity '%s' attribute '%s' returned Uknown or Unavailable: '%s'.",
+                "Entity '%s' attribute '%s' returned Unknown or Unavailable: '%s'.",
                 self._attr_name,
                 attr,
                 value,
