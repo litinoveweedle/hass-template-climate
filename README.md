@@ -17,6 +17,12 @@ This is a fork of the original [jcwillox/hass-template-climate](https://github.c
 - `hvac_modes` defaults to `["off", "heat"]` instead of all modes
 - `preset_modes`, `fan_modes` and `swing_modes` are empty by default — only configure what you actually use
 
+> **Home Assistant compatibility:** this fork is built on Home Assistant's
+> modern template-entity platform (HA **2026.6+**). It supports the standard
+> template-entity options `name`, `unique_id`, `availability`, `icon`,
+> `picture`, `attributes` and `variables`, and automatically rewrites the
+> legacy `*_template`/`friendly_name` keys (see [Deprecated Keys](#deprecated-keys)).
+
 ## Preset Modes as Preset Profiles
 
 Preset modes can function as full profiles: each preset can store hvac mode, fan mode, swing mode, target temperatures, and humidity. Values are editable via the HA UI and preserved across restarts. Three config options control this: `presets_features`, `presets_template`, and `set_presets`.
@@ -124,8 +130,14 @@ The following config keys still work but will log a deprecation warning. Please 
 | ------------------------- | -------------- | ------------------------------------------------------------ |
 | `modes`                   | `hvac_modes`   | Renamed in this fork. Automatically mapped on load.          |
 | `availability_template`   | `availability` | HA template entity standard. Automatically mapped on load.   |
-| `icon_template`           | `icon`         | HA template entity standard.                                 |
-| `entity_picture_template` | `picture`      | HA template entity standard.                                 |
+| `icon_template`           | `icon`         | HA template entity standard. Automatically mapped on load.   |
+| `entity_picture_template` | `picture`      | HA template entity standard. Automatically mapped on load.   |
+| `friendly_name`           | `name`         | HA template entity standard. Automatically mapped on load.   |
+
+> Legacy template-entity keys (`availability_template`, `icon_template`,
+> `entity_picture_template`, `friendly_name`) are rewritten to their modern
+> equivalents by Home Assistant's template platform when the entity is created,
+> so existing configurations continue to work unchanged.
 
 ## Example Configuration
 
