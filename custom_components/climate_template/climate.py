@@ -2,10 +2,11 @@
 
 import logging
 
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
 from enum import IntFlag
-from homeassistant.core import HomeAssistant, Context, callback
+from typing import Any, TypedDict
+
+import voluptuous as vol
+
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -44,29 +45,46 @@ from homeassistant.components.climate.const import (
     HVACMode,
     HVACAction,
 )
-from homeassistant.components.template.const import CONF_AVAILABILITY_TEMPLATE
-from homeassistant.components.template.helpers import async_setup_template_platform
+from homeassistant.components.template.const import (
+    CONF_AVAILABILITY,
+    CONF_AVAILABILITY_TEMPLATE,
+    CONF_DEFAULT_ENTITY_ID,
+    CONF_PICTURE,
+)
+from homeassistant.components.template.helpers import (
+    async_create_template_tracking_entities,
+)
 from homeassistant.components.template.schemas import (
     make_template_entity_common_modern_attributes_schema,
 )
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_TEMPERATURE,
+    CONF_ENTITY_PICTURE_TEMPLATE,
+    CONF_FRIENDLY_NAME,
+    CONF_ICON,
+    CONF_ICON_TEMPLATE,
+    CONF_NAME,
+    CONF_STATE,
+    CONF_VALUE_TEMPLATE,
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
-    ATTR_TEMPERATURE,
+    STATE_OFF,
+    STATE_ON,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
-    CONF_ICON_TEMPLATE,
-    CONF_ENTITY_PICTURE_TEMPLATE,
 )
-
-CONF_AVAILABILITY = "availability"
+from homeassistant.core import HomeAssistant, Context, callback
+from homeassistant.helpers import template
+import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,6 +156,18 @@ class ClimateEntityPresetFeature(IntFlag):
     TARGET_HUMIDITY = 128
 
 
+class ClimateEntityPresetValues(TypedDict, total=False):
+    """Typed mapping for a single preset mode payload."""
+
+    hvac_mode: str
+    fan_mode: str
+    swing_mode: str
+    target_temperature: float
+    target_temperature_low: float
+    target_temperature_high: float
+    target_humidity: int
+
+
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     make_template_entity_common_modern_attributes_schema(
         CLIMATE_DOMAIN, DEFAULT_NAME
@@ -201,21 +231,76 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
 )
 
 
+LEGACY_FIELDS = {
+    CONF_AVAILABILITY_TEMPLATE: CONF_AVAILABILITY,
+    CONF_ENTITY_PICTURE_TEMPLATE: CONF_PICTURE,
+    CONF_FRIENDLY_NAME: CONF_NAME,
+    CONF_ICON_TEMPLATE: CONF_ICON,
+    CONF_VALUE_TEMPLATE: CONF_STATE,
+}
+
+
+def rewrite_legacy_to_modern_config(
+    hass: HomeAssistant,
+    entity_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    """Rewrite legacy config."""
+    entity_cfg = {**entity_cfg}
+
+    # Remove deprecated entity_id field from legacy syntax
+    entity_cfg.pop(ATTR_ENTITY_ID, None)
+
+    for from_key, to_key in LEGACY_FIELDS.items():
+        if from_key not in entity_cfg or to_key in entity_cfg:
+            continue
+
+        val = entity_cfg.pop(from_key)
+        if isinstance(val, str):
+            val = template.Template(val, hass)
+        entity_cfg[to_key] = val
+
+    if CONF_NAME in entity_cfg and isinstance(entity_cfg[CONF_NAME], str):
+        entity_cfg[CONF_NAME] = template.Template(entity_cfg[CONF_NAME], hass)
+
+    return entity_cfg
+
+
+def rewrite_legacy_to_modern_configs(
+    hass: HomeAssistant,
+    domain: str,
+    entity_cfg: dict[str, dict],
+) -> list[dict]:
+    """Rewrite legacy configuration definitions to modern ones."""
+    entities = []
+    for object_id, entity_conf in entity_cfg.items():
+        entity_conf = {**entity_conf, CONF_DEFAULT_ENTITY_ID: f"{domain}.{object_id}"}
+
+        entity_conf = rewrite_legacy_to_modern_config(hass, entity_conf)
+
+        if CONF_NAME not in entity_conf:
+            entity_conf[CONF_NAME] = template.Template(object_id, hass)
+
+        entities.append(entity_conf)
+
+    return entities
+
+
 async def async_setup_platform(
-    hass: HomeAssistant, config: ConfigType, async_add_entities, discovery_info=None
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
 ):
     """Set up the Template Climate."""
-    await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
-    await async_setup_template_platform(
-        hass,
-        CLIMATE_DOMAIN,
-        config,
-        TemplateClimate,
-        None,
-        async_add_entities,
-        discovery_info,
-        {},
-    )
+    if discovery_info is None:
+        await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
+        async_create_template_tracking_entities(
+            TemplateClimate,
+            async_add_entities,
+            hass,
+            [rewrite_legacy_to_modern_config(hass, config)],
+            None,
+        )
 
 
 class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
@@ -306,9 +391,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._action_presets = config.get(CONF_SET_PRESETS_ACTION)
 
         # Init private attributes
-        self._presets = {}
-        self._off_mode = {}
-        self._last_on_mode = {}
+        self._presets: dict[str, ClimateEntityPresetValues] = {}
+        self._off_mode: dict[str, str] = {}
+        self._last_on_mode: dict[str, str] = {}
         self._presets_features = config.get(CONF_PRESETS_FEATURES)
 
         # Init scripts callbacks.
@@ -381,7 +466,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     CONF_SET_PRESET_MODE_ACTION,
                     CONF_PRESET_MODE_TEMPLATE,
                 )
-                self._presets = 0
+                self._presets = {}
 
         if self._attr_fan_modes and len(self._attr_fan_modes) >= 2:
             self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
@@ -474,7 +559,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
             ):
                 _LOGGER.info(
-                    "Entity '%s' has hvac mode heat_cool configured, but there is neither '%s' action, '%s' and '%s' template nor preset_features.target_temperature_range configued.",
+                    "Entity '%s' has hvac mode heat_cool configured, but there is neither '%s' action, '%s' and '%s' template nor preset_features.target_temperature_range configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                     CONF_TARGET_TEMPERATURE_LOW_TEMPLATE,
@@ -522,7 +607,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
             else:
                 _LOGGER.warning(
-                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is neither '%s' action, '%s' template nor preset_features.target_temperature configued.",
+                    "Entity '%s' has hvac mode auto, heat or cool configured, but there is neither '%s' action, '%s' template nor preset_features.target_temperature configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
@@ -556,14 +641,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         ):
             self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
 
-        if (
-            not self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
-            and (
-                self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
-                or self._presets_features
-                & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
-                or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
-            )
+        if not self._presets_features & ClimateEntityPresetFeature.EDITABLE and (
+            self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
+            or self._presets_features
+            & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
+            or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
         ):
             _LOGGER.warning(
                 "Entity '%s' has presets features configured, but there is neither '%s' action nor preset_features.editable configured.",
@@ -743,7 +825,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         "target_humidity",
                     )
                 ) is not None:
-                    self._target_humidity = target_humidity
+                    self._attr_target_humidity = target_humidity
 
             if (
                 value := previous_state.attributes.get(ATTR_CURRENT_TEMPERATURE)
@@ -781,15 +863,15 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
             if (
                 value := previous_state.attributes.get("last_on_mode")
-            ) is not None and type(value) is dict:
-                for mode in value.keys():
+            ) is not None and isinstance(value, dict):
+                for mode in value:
                     self._last_on_mode[mode] = value[mode]
 
             if self._presets_features:
                 if (
                     self._presets_features & ClimateEntityPresetFeature.PRESERVED
                     and (value := previous_state.attributes.get("presets")) is not None
-                    and type(value) is dict
+                    and isinstance(value, dict)
                 ):
                     self._presets = self._validate_presets(value)
                 else:
@@ -928,6 +1010,11 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        _LOGGER.debug(
+            "Entity '%s' successfully registered to homeassistant.",
+            self._attr_name,
+        )
+
         super()._async_setup_templates()
 
     def _validate_value(self, attr, value, format):
@@ -948,14 +1035,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             return None
         elif value in (STATE_UNKNOWN, STATE_UNAVAILABLE):
             _LOGGER.debug(
-                "Entity '%s' attribute '%s' returned Uknown or Unavailable: '%s'.",
+                "Entity '%s' attribute '%s' returned Unknown or Unavailable: '%s'.",
                 self._attr_name,
                 attr,
                 value,
             )
             return None
         elif format is not None:
-            if type(format) is list or type(format) is dict:
+            if isinstance(format, (list, dict)):
                 value = str(value)
                 if value not in format:
                     _LOGGER.error(
@@ -1014,10 +1101,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         self._attr_min_temp,
                     )
                     return None
-            elif format == "curent_humidity":
+            elif format == "current_humidity":
                 try:
                     value = round(value)
-                except ValueError:
+                except (TypeError, ValueError):
                     _LOGGER.error(
                         "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
                         self._attr_name,
@@ -1028,9 +1115,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             elif format == "target_humidity":
                 try:
                     value = round(value)
-                except ValueError:
+                except (TypeError, ValueError):
                     _LOGGER.error(
-                        "Entity '%s' attribute '%s' returned invalid value: '%'s. Expected integer of float.",
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
                         self._attr_name,
                         attr,
                         value,
@@ -1070,19 +1157,24 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         return value
 
-    def _validate_presets(self, presets):
-        value = {}
+    def _validate_presets(self, presets: Any) -> dict[str, ClimateEntityPresetValues]:
+        if not isinstance(presets, dict):
+            _LOGGER.error(
+                "Entity '%s' attribute '%s' returned invalid type: '%s'. Expected dictionary.",
+                self._attr_name,
+                CONF_PRESETS_TEMPLATE,
+                type(presets).__name__,
+            )
+            presets = {}
+
+        value: dict[str, ClimateEntityPresetValues] = {}
         for mode in self._attr_preset_modes:
-            if (
-                mode in presets.keys()
-                and type(presets[mode]) is dict
-                and presets[mode].keys()
-            ):
-                if not mode in value.keys():
+            if mode in presets and isinstance(presets[mode], dict) and presets[mode]:
+                if mode not in value:
                     value[mode] = {}
                 if self._presets_features & ClimateEntityPresetFeature.HVAC_MODE:
                     if (
-                        "hvac_mode" in presets[mode].keys()
+                        "hvac_mode" in presets[mode]
                         and (
                             hvac_mode := self._validate_value(
                                 "hvac_mode",
@@ -1098,7 +1190,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
                 if self._presets_features & ClimateEntityPresetFeature.FAN_MODE:
                     if (
-                        "fan_mode" in presets[mode].keys()
+                        "fan_mode" in presets[mode]
                         and (
                             fan_mode := self._validate_value(
                                 "fan_mode",
@@ -1114,7 +1206,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
                 if self._presets_features & ClimateEntityPresetFeature.SWING_MODE:
                     if (
-                        "swing_mode" in presets[mode].keys()
+                        "swing_mode" in presets[mode]
                         and (
                             swing_mode := self._validate_value(
                                 "swing_mode",
@@ -1133,7 +1225,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     & ClimateEntityPresetFeature.TARGET_TEMPERATURE
                 ):
                     if (
-                        "target_temperature" in presets[mode].keys()
+                        "target_temperature" in presets[mode]
                         and (
                             target_temperature := self._validate_value(
                                 "target_temperature",
@@ -1152,7 +1244,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     & ClimateEntityPresetFeature.TARGET_TEMPERATURE_RANGE
                 ):
                     if (
-                        "target_temperature_low" in presets[mode].keys()
+                        "target_temperature_low" in presets[mode]
                         and (
                             target_temperature_low := self._validate_value(
                                 "target_temperature_low",
@@ -1166,7 +1258,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     else:
                         value[mode]["target_temperature_low"] = None
                     if (
-                        "target_temperature_high" in presets[mode].keys()
+                        "target_temperature_high" in presets[mode]
                         and (
                             target_temperature_high := self._validate_value(
                                 "target_temperature_high",
@@ -1182,7 +1274,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
                 if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
                     if (
-                        "target_humidity" in presets[mode].keys()
+                        "target_humidity" in presets[mode]
                         and (
                             target_humidity := self._validate_value(
                                 "target_humidity",
@@ -1247,11 +1339,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self.hass.async_create_task(
             self.async_set_preset_mode(**{ATTR_PRESET_MODE: preset_mode})
         )
-        # Activate preset mode
-        if self._attr_preset_mode in self._presets.keys():
-            self.hass.async_create_task(
-                self.async_set_presets(self._presets[self._attr_preset_mode])
-            )
 
     @callback
     def _update_fan_mode(self, fan_mode: str):
@@ -1336,11 +1423,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             presets,
         )
         value = self._validate_presets(presets)
-        if self._attr_preset_mode in value.keys():
+        if self._attr_preset_mode in value:
             self.hass.async_create_task(
                 self.async_set_presets(value[self._attr_preset_mode])
             )
         self._presets = value
+        self.async_write_ha_state()
 
     @callback
     def _update_current_temperature(self, current_temperature: float):
@@ -1356,6 +1444,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
         ) is not None:
             self._attr_current_temperature = value
+            self.async_write_ha_state()
 
     @callback
     def _update_current_humidity(self, current_humidity: float):
@@ -1371,6 +1460,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
         ) is not None:
             self._attr_current_humidity = value
+            self.async_write_ha_state()
 
     @callback
     def _update_hvac_action(self, hvac_action: str):
@@ -1386,6 +1476,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             )
         ) is not None:
             self._attr_hvac_action = value
+            self.async_write_ha_state()
 
     @callback
     def _update_temp_step(self, temp_step):
@@ -1404,11 +1495,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._attr_name,
                     temp_step,
                 )
+            self.async_write_ha_state()
 
-    async def _async_set_attribute(self, action, attributes) -> None:
+    async def _async_set_attribute(
+        self, action: str, attributes: dict[str, dict[str, Any]]
+    ) -> bool:
         presets = {}
         variables = {}
-        for attr in attributes.keys():
+        for attr in attributes:
             # Validate input values
             if (
                 value := self._validate_value(
@@ -1444,7 +1538,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 setattr(self, "_attr_" + attr, attributes[attr]["value"])
                 # Update last_on modes if not off mode.
                 if (
-                    attr in self._off_mode.keys()
+                    attr in self._off_mode
                     and attributes[attr]["value"] != self._off_mode[attr]
                 ):
                     self._last_on_mode[attr] = attributes[attr]["value"]
@@ -1452,14 +1546,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 variables[attributes[attr]["attr"]] = attributes[attr]["value"]
                 # Update presets if defined.
                 if (
-                    len(self._presets)
+                    self._presets
                     and self._presets_features & ClimateEntityPresetFeature.EDITABLE
-                    and self._attr_preset_mode in self._presets.keys()
-                    and attr in self._presets[self._attr_preset_mode].keys()
+                    and self._attr_preset_mode in self._presets
+                    and attr in self._presets[self._attr_preset_mode]
                     and self._presets[self._attr_preset_mode][attr]
                     != attributes[attr]["value"]
                 ):
-                    if not self._attr_preset_mode in presets.keys():
+                    if self._attr_preset_mode not in presets:
                         presets[self._attr_preset_mode] = {}
                     presets[self._attr_preset_mode][attr] = attributes[attr]["value"]
                     self._presets[self._attr_preset_mode][attr] = attributes[attr][
@@ -1502,7 +1596,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 variables,
             )
             await self.async_run_script(
-                script,
+                self._script_presets,
                 run_variables=variables,
                 context=script_context,
             )
@@ -1554,20 +1648,17 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_turn_off(self) -> None:
         """Turn climate off."""
-        if "hvac_mode" in self._off_mode.keys():
+        if "hvac_mode" in self._off_mode:
             await self.async_set_hvac_mode(self._off_mode["hvac_mode"])
 
     async def async_turn_on(self) -> None:
         """Turn climate on."""
-        if "hvac_mode" in self._last_on_mode.keys():
+        if "hvac_mode" in self._last_on_mode:
             await self.async_set_hvac_mode(self._last_on_mode["hvac_mode"])
 
     async def async_toggle(self) -> None:
         """Toggle climate."""
-        if (
-            "hvac_mode" in self._off_mode.keys()
-            and "hvac_mode" in self._last_on_mode.keys()
-        ):
+        if "hvac_mode" in self._off_mode and "hvac_mode" in self._last_on_mode:
             if self._attr_hvac_mode == self._off_mode["hvac_mode"]:
                 await self.async_set_hvac_mode(self._last_on_mode["hvac_mode"])
             elif self._attr_hvac_mode == self._last_on_mode["hvac_mode"]:
@@ -1588,16 +1679,24 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        await self._async_set_attribute(
-            "preset_mode",
-            {
-                "preset_mode": {
-                    "attr": ATTR_PRESET_MODE,
-                    "value": preset_mode,
-                    "format": self._attr_preset_modes,
-                }
-            },
-        )
+        if (
+            await self._async_set_attribute(
+                "preset_mode",
+                {
+                    "preset_mode": {
+                        "attr": ATTR_PRESET_MODE,
+                        "value": preset_mode,
+                        "format": self._attr_preset_modes,
+                    }
+                },
+            )
+            is False
+        ):
+            return
+
+        # Update presets if defined.
+        if preset_mode in self._presets:
+            await self.async_set_presets(self._presets[preset_mode])
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode."""
@@ -1640,7 +1739,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperatures."""
-        attributes = {}
+        attributes: dict[str, dict[str, Any]] = {}
         if (target_temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
             attributes["target_temperature"] = {
                 "attr": ATTR_TEMPERATURE,
@@ -1668,30 +1767,30 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         if len(attributes):
             await self._async_set_attribute("temperature", attributes)
 
-    async def async_set_presets(self, preset) -> None:
-        attributes = {}
+    async def async_set_presets(self, preset: ClimateEntityPresetValues) -> None:
+        attributes: dict[str, Any] = {}
         if any(
-            attr in preset.keys()
+            attr in preset
             for attr in [
                 "target_temperature",
                 "target_temperature_low",
                 "target_temperature_high",
             ]
         ):
-            if "target_temperature" in preset.keys():
+            if "target_temperature" in preset:
                 attributes[ATTR_TEMPERATURE] = preset["target_temperature"]
-            if "target_temperature_low" in preset.keys():
+            if "target_temperature_low" in preset:
                 attributes[ATTR_TARGET_TEMP_LOW] = preset["target_temperature_low"]
-            if "target_temperature_high" in preset.keys():
+            if "target_temperature_high" in preset:
                 attributes[ATTR_TARGET_TEMP_HIGH] = preset["target_temperature_high"]
-            if "hvac_mode" in preset.keys():
+            if "hvac_mode" in preset:
                 attributes[ATTR_HVAC_MODE] = preset["hvac_mode"]
             await self.async_set_temperature(**attributes)
-        elif "hvac_mode" in preset.keys():
+        elif "hvac_mode" in preset:
             await self.async_set_hvac_mode(**{ATTR_HVAC_MODE: preset["hvac_mode"]})
-        if "fan_mode" in preset.keys():
+        if "fan_mode" in preset:
             await self.async_set_fan_mode(**{ATTR_FAN_MODE: preset["fan_mode"]})
-        if "swing_mode" in preset.keys():
+        if "swing_mode" in preset:
             await self.async_set_swing_mode(**{ATTR_SWING_MODE: preset["swing_mode"]})
-        if "target_humidity" in preset.keys():
+        if "target_humidity" in preset:
             await self.async_set_humidity(**{ATTR_HUMIDITY: preset["target_humidity"]})
