@@ -595,9 +595,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
                 )
         else:
-            if self._action_temperature:
+            if (
+                self._action_temperature
+                and HVACMode.HEAT_COOL not in self._attr_hvac_modes
+            ):
                 _LOGGER.warning(
-                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is action '%s' configured.",
+                    "Entity '%s' has no hvac mode auto, heat, cool, or heat_cool configured, but there is action '%s' configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                 )
