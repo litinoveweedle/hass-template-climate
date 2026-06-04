@@ -54,7 +54,9 @@ from homeassistant.components.template.const import (
 from homeassistant.components.template.helpers import (
     async_create_template_tracking_entities,
 )
-from homeassistant.components.template.schemas import make_template_entity_base_schema
+from homeassistant.components.template.schemas import (
+    make_template_entity_common_modern_attributes_schema,
+)
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
@@ -96,6 +98,7 @@ CONF_HUMIDITY_MIN = "min_humidity"
 CONF_HUMIDITY_MAX = "max_humidity"
 CONF_PRECISION = "precision"
 CONF_TEMP_STEP = "temp_step"
+CONF_TEMP_STEP_TEMPLATE = "temp_step_template"
 CONF_MODE_ACTION = "mode_action"
 CONF_MAX_ACTION = "max_action"
 CONF_PRESETS_FEATURES = "presets_features"
@@ -166,7 +169,9 @@ class ClimateEntityPresetValues(TypedDict, total=False):
 
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    make_template_entity_base_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema
+    make_template_entity_common_modern_attributes_schema(
+        CLIMATE_DOMAIN, DEFAULT_NAME
+    ).schema
 ).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
@@ -183,6 +188,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PRESET_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
+        vol.Optional(CONF_TEMP_STEP_TEMPLATE): cv.template,
         vol.Optional(CONF_PRESETS_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
@@ -191,6 +197,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SET_PRESET_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_SWING_MODE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_PRESETS_ACTION): cv.SCRIPT_SCHEMA,
+        vol.Optional("modes"): cv.ensure_list,  # Deprecated: use hvac_modes
         vol.Optional(
             CONF_HVAC_MODE_LIST, default=DEFAULT_HVAC_MODE_LIST
         ): cv.ensure_list,
@@ -305,6 +312,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
     def __init__(self, hass: HomeAssistant, config: ConfigType, unique_id: str | None):
         """Initialize the climate device."""
+        # Map deprecated 'modes' to 'hvac_modes' for backwards compatibility with jcwillox configs.
+        if "modes" in config and CONF_HVAC_MODE_LIST not in config:
+            _LOGGER.warning(
+                "climate_template: Config key 'modes' is deprecated and will be removed "
+                "in a future release. Please rename it to 'hvac_modes'."
+            )
+            config = {**config, CONF_HVAC_MODE_LIST: config["modes"]}
+        # Map legacy availability_template to availability so TemplateEntity picks it up.
+        if CONF_AVAILABILITY_TEMPLATE in config and CONF_AVAILABILITY not in config:
+            config = {**config, CONF_AVAILABILITY: config[CONF_AVAILABILITY_TEMPLATE]}
         super().__init__(hass, config, unique_id)
         self._config = config
 
@@ -363,6 +380,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         self._template_target_humidity = config.get(CONF_TARGET_HUMIDITY_TEMPLATE)
         self._template_presets = config.get(CONF_PRESETS_TEMPLATE)
+        self._template_temp_step = config.get(CONF_TEMP_STEP_TEMPLATE)
 
         self._action_hvac_mode = config.get(CONF_SET_HVAC_MODE_ACTION)
         self._action_preset_mode = config.get(CONF_SET_PRESET_MODE_ACTION)
@@ -616,41 +634,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._presets_features ^= ClimateEntityPresetFeature.TARGET_TEMPERATURE
 
-        if HVACMode.DRY in self._attr_hvac_modes:
-            if (
-                self._action_humidity
-                or self._template_target_humidity
-                or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
-            ):
-                self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
-            else:
-                _LOGGER.warning(
-                    "Entity '%s' has hvac mode dry configured, but there is neither '%s' action, '%s' template nor preset_features.humidity configured.",
-                    self._attr_name,
-                    CONF_SET_HUMIDITY_ACTION,
-                    CONF_TARGET_HUMIDITY_TEMPLATE,
-                )
-        else:
-            if self._action_humidity:
-                _LOGGER.warning(
-                    "Entity '%s' has no hvac mode dry configured, but there is action '%s' configured.",
-                    self._attr_name,
-                    CONF_SET_HUMIDITY_ACTION,
-                )
-                self._action_humidity = None
-            if self._template_target_humidity:
-                _LOGGER.warning(
-                    "Entity '%s' has no hvac mode dry configured, but there is template '%s' configured.",
-                    self._attr_name,
-                    CONF_TARGET_HUMIDITY_TEMPLATE,
-                )
-                self._action_humidity = None
-            if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
-                _LOGGER.warning(
-                    "Entity '%s' has no hvac mode dry configured, but preset_features.target_humidity is set.",
-                    self._attr_name,
-                )
-                self._presets_features ^= ClimateEntityPresetFeature.TARGET_HUMIDITY
+        if (
+            self._action_humidity
+            or self._template_target_humidity
+            or self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY
+        ):
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
 
         if not self._presets_features & ClimateEntityPresetFeature.EDITABLE and (
             self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE
@@ -888,12 +877,22 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 else:
                     self._presets = self._validate_presets(self._presets)
 
+    def _async_setup_templates(self) -> None:
+        """Register template attributes before HA wires up the tracker.
+
+        The modern TemplateEntity base calls this synchronously from
+        async_added_to_hass, *before* async_at_start schedules
+        _async_template_startup. When HA is already running (reload path),
+        _async_template_startup fires immediately inside super(), so every
+        add_template_attribute call must complete here — not afterward in
+        async_added_to_hass — or the tracker will be built from an empty dict
+        and templates will never re-evaluate.
+        """
         _LOGGER.debug(
             "Entity '%s' registering templates callbacks.",
             self._attr_name,
         )
 
-        # Register templates callback.
         if self._template_hvac_mode:
             self.add_template_attribute(
                 "_hvac_mode",
@@ -1002,10 +1001,21 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        if self._template_temp_step:
+            self.add_template_attribute(
+                "_attr_target_temperature_step",
+                self._template_temp_step,
+                None,
+                self._update_temp_step,
+                none_on_template_error=True,
+            )
+
         _LOGGER.debug(
             "Entity '%s' successfully registered to homeassistant.",
             self._attr_name,
         )
+
+        super()._async_setup_templates()
 
     def _validate_value(self, attr, value, format):
         if value is None:
@@ -1468,6 +1478,25 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._attr_hvac_action = value
             self.async_write_ha_state()
 
+    @callback
+    def _update_temp_step(self, temp_step):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TEMP_STEP_TEMPLATE,
+            temp_step,
+        )
+        if temp_step not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            try:
+                self._attr_target_temperature_step = float(temp_step)
+            except (ValueError, TypeError):
+                _LOGGER.error(
+                    "Entity '%s' attribute 'temp_step' could not parse value: '%s'. Expected a number.",
+                    self._attr_name,
+                    temp_step,
+                )
+            self.async_write_ha_state()
+
     async def _async_set_attribute(
         self, action: str, attributes: dict[str, dict[str, Any]]
     ) -> bool:
@@ -1611,6 +1640,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Platform specific attributes."""
         return {
+            **(self._attr_extra_state_attributes or {}),
             "presets": self._presets,
             "last_on_mode": self._last_on_mode,
             "off_mode": self._off_mode,
