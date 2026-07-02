@@ -1002,6 +1002,14 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        # Template attributes are registered dynamically here, after the
+        # parent async_added_to_hass has already run.
+        # Explicitly start template tracking so callbacks are evaluated and
+        # entity state/attributes stay updated.
+        async_setup_templates = getattr(self, "_async_setup_templates", None)
+        if callable(async_setup_templates):
+            async_setup_templates()
+
         _LOGGER.debug(
             "Entity '%s' successfully registered to homeassistant.",
             self._attr_name,
