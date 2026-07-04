@@ -889,10 +889,31 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._presets = self._validate_presets(self._presets)
 
         _LOGGER.debug(
-            "Entity '%s' registering templates callbacks.",
+            "Entity '%s' successfully registered to homeassistant.",
             self._attr_name,
         )
 
+    @callback
+    def _async_setup_templates(self) -> None:
+        """Register this entity's own templates, then the base class's.
+
+        Must run BEFORE TemplateEntity.async_added_to_hass() reaches
+        async_at_start(self.hass, self._async_template_startup): that call runs
+        _async_template_startup() SYNCHRONOUSLY when hass.is_running is already
+        True (i.e. on every live reload after boot, not just cold start), and
+        _async_template_startup() only wires up async_track_template_result()
+        for whatever is in self._template_attrs AT THAT MOMENT. Registering
+        these template attributes later (e.g. inline in an overridden
+        async_added_to_hass(), after the super() call) misses that window: the
+        attribute is added to self._template_attrs but never included in the
+        tracked set, so it renders once (or falls back to the restored
+        previous_state) and then never updates again until a full HA restart
+        (only then does hass.is_running start False, deferring
+        _async_template_startup to EVENT_HOMEASSISTANT_START, by which point
+        registration has long since finished). This mirrors the pattern core
+        template entities use, e.g. StateSensorEntity in
+        homeassistant/components/template/sensor.py.
+        """
         # Register templates callback.
         if self._template_hvac_mode:
             self.add_template_attribute(
@@ -1002,18 +1023,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
-        # Template attributes are registered dynamically here, after the
-        # parent async_added_to_hass has already run.
-        # Explicitly start template tracking so callbacks are evaluated and
-        # entity state/attributes stay updated.
-        async_setup_templates = getattr(self, "_async_setup_templates", None)
-        if callable(async_setup_templates):
-            async_setup_templates()
-
-        _LOGGER.debug(
-            "Entity '%s' successfully registered to homeassistant.",
-            self._attr_name,
-        )
+        super()._async_setup_templates()
 
     def _validate_value(self, attr, value, format):
         if value is None:
