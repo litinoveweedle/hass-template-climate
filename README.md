@@ -262,6 +262,9 @@ climate:
 ```
 
 ### Add additional sensors to an existing climate device
+
+<img width="790" height="538" alt="image" src="https://github.com/user-attachments/assets/8e8e3328-1442-47a0-ae8b-0b1d78811b4d" />
+
 ```yaml
 climate:
   - platform: climate_template
