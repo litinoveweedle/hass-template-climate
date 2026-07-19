@@ -261,6 +261,50 @@ climate:
           option: "{{ preset_mode | title }}"
 ```
 
+### Add additional sensors to an existing climate device
+```yaml
+climate:
+  - platform: climate_template
+    name: Better Aircon
+    # The better_aircon unique_id is assigned so we can call it later when setting the hvac modes, etc.
+    unique_id: better_aircon
+    hvac_modes:
+      - "off"
+      - "cool"
+      - "heat"
+      - "fan_only"
+      - "dry"
+    fan_modes:
+      - "auto"
+      - "low"
+      - "medium"
+      - "high"
+    min_temp: 16
+    max_temp: 30
+    # In this example, sensor.average_house_temperature and sensor.average_house_humidity are existing in my home
+    current_temperature_template: "{{ states('sensor.average_house_temperature') }}"
+    # The climate.ac sensor is the existing AC sensor we are adding sensors to
+    target_temperature_template: "{{ state_attr('climate.ac', 'temperature') | int }}"
+    current_humidity_template: "{{ states('sensor.average_house_humidity') }}"
+    hvac_mode_template: "{{ states('climate.ac') }}"
+    fan_mode_template: "{{ state_attr('climate.ac', 'fan_mode') }}"
+    set_temperature:
+      - service: climate.set_temperature
+        data:
+          entity_id: climate.ac
+          temperature: "{{ state_attr('climate.better_aircon', 'temperature') | int }}"
+    set_fan_mode:
+      - service: climate.set_fan_mode
+        data:
+          entity_id: climate.ac
+          fan_mode: "{{ state_attr('climate.better_aircon', 'fan_mode') }}"
+    set_hvac_mode:
+      - service: climate.set_hvac_mode
+        data:
+          entity_id: climate.ac
+          hvac_mode: "{{ states('climate.better_aircon') }}"
+```
+
 
 
 
