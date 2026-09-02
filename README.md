@@ -90,6 +90,8 @@ All configuration variables are optional. If you do not define a `template` or i
 | mode_action                          | `string`                                                                  | Possible values: `parallel`, `queued`, `restart`, `single`. For explanation, see the [`script`](https://www.home-assistant.io/integrations/script/#script-modes) documentation.                                                                                                                | single                                  |
 | max_action                           | `positive_int`                                                            | Limits the number of concurrent runs of actions. Used together with `parallel` and `queued` `mode_action`, set to a positive number greater than 1. For explanation, see the [`script`](https://www.home-assistant.io/integrations/script/#max) documentation.                                  | 1                                       |
 | presets_features                     | `positive_int`                                                            | Define the feature flags supported by the `preset_mode` feature as bit flags. See [example](#presets_features) for options. Default value `0` means presets are disabled.                                                                                                                       | 0                                       |
+| icons                                 | `dict`                                                                    | Defines the icon mapping for this entity, used to generate `icons.json` on startup. Requires `unique_id` or a plain-string `name` so the entity has a stable identifier to key the mapping by. See [icons](#icons) for details.                                                               |                                         |
+| translations                          | `dict`                                                                    | Defines per-language state text translations for this entity, keyed by language code, used to generate `translations/<lang>.json` on startup. Requires the same stable identifier as `icons`. See [translations](#translations) for details.                                                 |                                         |
 | icon_template                        | [`template`](https://www.home-assistant.io/docs/configuration/templating) | Defines a template for the icon of the sensor.                                                                                                                                                                                                                                                  |                                         |
 | entity_picture_template              | [`template`](https://www.home-assistant.io/docs/configuration/templating) | Defines a template for the entity picture of the sensor.                                                                                                                                                                                                                                        |                                         |
 | availability_template                | [`template`](https://www.home-assistant.io/docs/configuration/templating) | Defines a template to get the `available` state of the component. If the template returns `true`, the device is `available`. If it returns any other value, the device is `unavailable`. If `availability_template` is not configured, the component will always be `available`.              | true                                    |
@@ -132,6 +134,96 @@ All configuration variables are optional. If you do not define a `template` or i
 | max_humidity                         | `float`                                                                   | Maximum humidity set point available.                                                                                                                                                                                                                                                           | 99                                      |
 | precision                            | `float`                                                                   | The desired precision for this device.                                                                                                                                                                                                                                                          | 0.1 for Celsius and 1.0 for Fahrenheit. |
 | temp_step                            | `float`                                                                   | Step size for the temperature set point.                                                                                                                                                                                                                                                       | 1                                       |
+
+### icons
+
+Home Assistant's [icon translations](https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/icon-translations/) let an integration assign a custom mdi icon per entity state and per state attribute value (e.g. `hvac_mode`, `fan_mode`, `preset_mode`, `swing_mode`), but they only work from a static `icons.json` file shipped with the integration. Since this integration's entities are entirely user-defined in YAML, `icons.json` can't be hand-written up front, so this file is generated automatically from your configuration instead.
+
+To opt in, define `icons` on the entity, mirroring the shape of an `icons.json` entry: a top-level `default`/`state` map for the entity's own state (`hvac_mode`), plus a `state_attributes` map with `default`/`state` for `fan_mode`, `preset_mode`, and/or `swing_mode`. There's no separate translation-key option to set — the key used in `icons.json` is derived automatically for you, preferring `unique_id` (slugified) and falling back to a plain-string `name` (slugified) when `unique_id` isn't set. If neither gives a stable value (e.g. no `unique_id` and a templated `name`), the entity is skipped and keeps the default icons. On every Home Assistant startup, this integration collects the `icons` option from all `climate_template` entities and (re)writes `custom_components/climate_template/icons.json` from scratch. Entities that resolve to the same key (e.g. without `unique_id` and/or without or with same `name`) share the same icon mapping.
+
+```yaml
+climate:
+  - platform: climate_template
+    name: AC
+    unique_id: ac # used as the icons.json key; falls back to a slug of `name` if omitted
+    icons:
+      default: mdi:thermostat
+      state:
+        off: mdi:power
+        cool: mdi:snowflake
+        heat: mdi:fire
+      state_attributes:
+        fan_mode:
+          default: mdi:fan
+          state:
+            auto: mdi:fan-auto
+            low: mdi:fan-speed-1
+            medium: mdi:fan-speed-2
+            high: mdi:fan-speed-3
+        preset_mode:
+          default: mdi:tune
+          state:
+            eco: mdi:leaf
+            boost: mdi:rocket-launch
+        swing_mode:
+          default: mdi:arrow-up-down
+          state:
+            auto: mdi:auto-mode
+            up: mdi:arrow-up
+            down: mdi:arrow-down
+    hvac_modes: ["off", "cool", "heat"]
+    fan_modes: ["auto", "low", "medium", "high"]
+    preset_modes: ["eco", "boost"]
+    swing_modes: ["auto", "up", "down"]
+```
+
+> [!NOTE]
+> `icons.json` is only regenerated at Home Assistant startup, so restart Home Assistant after adding or changing `icons` configuration for the new icons to take effect.
+
+### translations
+
+Home Assistant [entity translations](https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/has-entity-name/) let an integration display translated text for an entity's state and state attribute values (`hvac_mode`, `fan_mode`, `preset_mode`, `swing_mode`), but like icons, they only work from static `translations/<lang>.json` files shipped with the integration. Since this integration's entities are entirely user-defined in YAML, these files are generated automatically from your configuration, the same way `icons.json` is.
+
+To opt in, define `translations` on the entity as a map of language code to an entry with an optional `name` (the entity's own display name) and/or `state`/`state_attributes` value-to-text maps for `hvac_mode`, `fan_mode`, `preset_mode`, and/or `swing_mode` — the same shape as `icons`, minus the `default` fallback (text has no generic fallback, only exact per-value translations). The entity's key is derived the same way as for `icons` (`unique_id`, falling back to a static `name`). On every Home Assistant startup, this integration collects the `translations` option from all `climate_template` entities and (re)writes `custom_components/climate_template/translations/<lang>.json` for every language referenced in your configuration.
+
+```yaml
+climate:
+  - platform: climate_template
+    name: AC
+    unique_id: ac
+    translations:
+      en:
+        name: AC
+        state:
+          off: "Off"
+          cool: "Cooling"
+          heat: "Heating"
+        state_attributes:
+          fan_mode:
+            state:
+              auto: "Automatic"
+              low: "Low"
+              medium: "Medium"
+              high: "High"
+      cs:
+        name: "Klimatizace"
+        state:
+          off: "Vypnuto"
+          cool: "Chlazení"
+          heat: "Topení"
+        state_attributes:
+          fan_mode:
+            state:
+              auto: "Automaticky"
+              low: "Nízké"
+              medium: "Střední"
+              high: "Vysoké"
+    hvac_modes: ["off", "cool", "heat"]
+    fan_modes: ["auto", "low", "medium", "high"]
+```
+
+> [!NOTE]
+> `translations/<lang>.json` files are only regenerated at Home Assistant startup, so restart Home Assistant after adding or changing `translations` configuration. Unlike `icons.json`, removing a language from your configuration does not delete its previously generated `translations/<lang>.json` file — delete it manually if needed.
 
 ## Example Configuration
 

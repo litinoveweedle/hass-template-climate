@@ -57,6 +57,7 @@ from homeassistant.const import (
     CONF_ICON_TEMPLATE,
     CONF_NAME,
     CONF_STATE,
+    CONF_UNIQUE_ID,
     CONF_VALUE_TEMPLATE,
     PRECISION_HALVES,
     PRECISION_TENTHS,
@@ -72,6 +73,7 @@ from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.util import slugify
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +90,8 @@ CONF_TEMP_STEP = "temp_step"
 CONF_MODE_ACTION = "mode_action"
 CONF_MAX_ACTION = "max_action"
 CONF_PRESETS_FEATURES = "presets_features"
+CONF_ICONS = "icons"
+CONF_TRANSLATIONS = "translations"
 
 CONF_CURRENT_TEMPERATURE_TEMPLATE = "current_temperature_template"
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
@@ -161,6 +165,54 @@ class ClimateEntityPresetValues(TypedDict, total=False):
     target_humidity: int | None
 
 
+# Mirrors the entity.climate.<translation_key> block of icons.json, so a
+# validated CONF_ICONS value can be dropped straight into the generated file
+# without any reshaping. Top-level "default"/"state" cover the entity's own
+# state (hvac_mode), "state_attributes" covers fan_mode/preset_mode/swing_mode.
+ICON_STATE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("default"): cv.string,
+        vol.Optional("state"): {cv.string: cv.string},
+    }
+)
+ICONS_SCHEMA = vol.Schema(
+    {
+        vol.Optional("default"): cv.string,
+        vol.Optional("state"): {cv.string: cv.string},
+        vol.Optional("state_attributes"): vol.Schema(
+            {
+                vol.Optional(ATTR_FAN_MODE): ICON_STATE_SCHEMA,
+                vol.Optional(ATTR_PRESET_MODE): ICON_STATE_SCHEMA,
+                vol.Optional(ATTR_SWING_MODE): ICON_STATE_SCHEMA,
+            }
+        ),
+    }
+)
+
+# Mirrors the entity.climate.<translation_key> block of translations/<lang>.json.
+# Unlike icons, text translations have no "default" fallback, only exact
+# per-value "state" maps, plus an optional "name" for the entity itself.
+TRANSLATION_ATTRIBUTE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("state"): {cv.string: cv.string},
+    }
+)
+TRANSLATION_SCHEMA = vol.Schema(
+    {
+        vol.Optional("name"): cv.string,
+        vol.Optional("state"): {cv.string: cv.string},
+        vol.Optional("state_attributes"): vol.Schema(
+            {
+                vol.Optional(ATTR_FAN_MODE): TRANSLATION_ATTRIBUTE_SCHEMA,
+                vol.Optional(ATTR_PRESET_MODE): TRANSLATION_ATTRIBUTE_SCHEMA,
+                vol.Optional(ATTR_SWING_MODE): TRANSLATION_ATTRIBUTE_SCHEMA,
+            }
+        ),
+    }
+)
+# Keyed by language code, e.g. {"en": {...}, "cs": {...}}.
+TRANSLATIONS_SCHEMA = vol.Schema({cv.string: TRANSLATION_SCHEMA})
+
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     make_template_entity_common_modern_attributes_schema(
         CLIMATE_DOMAIN, DEFAULT_NAME
@@ -224,8 +276,34 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(
             CONF_PRESETS_FEATURES, default=DEFAULT_PRESETS_FEATURES
         ): cv.positive_int,
+        vol.Optional(CONF_ICONS): ICONS_SCHEMA,
+        vol.Optional(CONF_TRANSLATIONS): TRANSLATIONS_SCHEMA,
     }
 )
+
+
+def derive_translation_key(config: ConfigType) -> str | None:
+    """Best-effort translation_key derived from a unique entity identifier.
+
+    Prefers `unique_id` (genuinely unique across entities); falls back to a
+    static `name` string. Templated names are skipped since their value
+    isn't known until render, leaving the entity without a translation_key
+    (today's default icons).
+    """
+    unique_id = config.get(CONF_UNIQUE_ID)
+    if unique_id:
+        return slugify(str(unique_id)) or None
+
+    name = config.get(CONF_NAME)
+    if name is None:
+        return None
+    if isinstance(name, template.Template):
+        if not name.is_static:
+            return None
+        raw = name.template
+    else:
+        raw = str(name)
+    return slugify(raw) or None
 
 
 LEGACY_FIELDS = {
@@ -313,6 +391,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._config = config
 
         self._attr_name: str = config.get(CONF_FRIENDLY_NAME) or "Template Climate"
+        self._attr_translation_key = derive_translation_key(config)
         self._attr_supported_features = ClimateEntityFeature(0)
         self._attr_temperature_unit = hass.config.units.temperature_unit
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
