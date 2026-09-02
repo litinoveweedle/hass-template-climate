@@ -5,3 +5,4 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+/custom_components/climate_template/icons.json
