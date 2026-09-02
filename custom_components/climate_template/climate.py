@@ -322,12 +322,31 @@ def rewrite_legacy_to_modern_config(
     """Rewrite legacy config."""
     entity_cfg = {**entity_cfg}
 
+    entity_name = entity_cfg.get(CONF_NAME) or entity_cfg.get(
+        CONF_FRIENDLY_NAME, DEFAULT_NAME
+    )
+    if isinstance(entity_name, template.Template):
+        entity_name = entity_name.template
+
     # Remove deprecated entity_id field from legacy syntax
-    entity_cfg.pop(ATTR_ENTITY_ID, None)
+    if ATTR_ENTITY_ID in entity_cfg:
+        _LOGGER.warning(
+            "Entity '%s' uses deprecated configuration option '%s'; remove it from the configuration.",
+            entity_name,
+            ATTR_ENTITY_ID,
+        )
+        entity_cfg.pop(ATTR_ENTITY_ID, None)
 
     for from_key, to_key in LEGACY_FIELDS.items():
         if from_key not in entity_cfg or to_key in entity_cfg:
             continue
+
+        _LOGGER.warning(
+            "Entity '%s' uses legacy configuration option '%s'; migrate to '%s'.",
+            entity_name,
+            from_key,
+            to_key,
+        )
 
         val = entity_cfg.pop(from_key)
         if isinstance(val, str):
