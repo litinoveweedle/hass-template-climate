@@ -4,61 +4,72 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
-### 2026-09-02 - Customs icons and Translations
-
-- **Author:** [@litinoveweedle](https://github.com/litinoveweedle), [@BirbByte](https://github.com/BirbByte)
-- Add possibility to use custom icons for the state and state attributes
-- Add possibility for language translations for the state and state attributes
-
-
-### 2026-09-02 - Code Overhaul
+### 2026-09-02 — [PR #43](https://github.com/litinoveweedle/hass-template-climate/pull/43) — Custom icons and translations
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
-- Ruff compliancy fixes
-- Added new templates: temp_step, precision, min_temp, max_temp, min_humidity, max_humidity
-- Fixed issue with the HEAT_COOL temperature setting 
+- Added configuration-driven generation of Home Assistant icon translations for `hvac_mode`, `fan_mode`, `preset_mode`, and `swing_mode`.
+- Added configuration-driven generation of per-language entity state and state-attribute translations.
+- **Contributed by:** [@BirbByte](https://github.com/BirbByte) for the custom icon implementation.
 
 
-### 2026-05-30 — Fix: all templated properties freeze after platform reload
+### 2026-09-02 — Warn about deprecated configuration options
 
-- **Author:** [@mikopp](https://github.com/mikopp)
-- **Fixed:** After a platform reload (while HA is running), all templated properties (`current_temperature_template`, `hvac_mode_template`, `hvac_action_template`, `target_temperature_template`, `current_humidity_template`, etc.) stopped updating and remained stuck at their `RestoreEntity`-restored values indefinitely. Full HA restarts were unaffected. Root cause: the modern `TemplateEntity` base (HA 2025.8+) calls `_async_setup_templates()` before wiring up the template tracker via `async_at_start`; when HA is already running, that tracker fires synchronously inside `super().async_added_to_hass()` — before the subclass had registered any templates. Fix: override `_async_setup_templates()` and move all `add_template_attribute()` calls there, so registration always precedes tracker construction.
-
-
-### 2026-05-12 — [PR #2](https://github.com/mikopp/hass-template-climate/pull/2) — Fix CONF_AVAILABILITY import error
-
-- **Author:** [@mikopp](https://github.com/mikopp)
-- **Fixed:** `CONF_AVAILABILITY` was removed from `homeassistant.const` in HA 2025.x; defined locally instead.
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- Added startup warnings for legacy configuration fields and the deprecated `entity_id` option, including the affected entity name and migration target.
 
 
-### 2026-05-12 — [PR #1](https://github.com/mikopp/hass-template-climate/pull/1) — Integrate attributes support, fix schema and availability
+### 2026-09-02 — [PR #42](https://github.com/litinoveweedle/hass-template-climate/pull/42) — Ruff fixes and HEAT_COOL handling
 
-- **Author:** [@mikopp](https://github.com/mikopp)
-- **Added:** `temp_step_template` — template-based dynamic temperature step size. Overrides the static `temp_step` when set. Sourced from [@bernadoDavinci](https://github.com/bernadoDavinci/hass-template-climate/commit/02e4c4588bd673ea3c1e8d1476df58bfdefe8a55).
-- **Fixed:** `attributes` and `variables` in config were silently ignored. Switched to `make_template_entity_common_modern_attributes_schema` and merged `_attr_extra_state_attributes` into `extra_state_attributes`. Sourced from upstream [jcwillox PR #125](https://github.com/jcwillox/hass-template-climate/pull/125) and [PR #134](https://github.com/jcwillox/hass-template-climate/pull/134).
-- **Fixed:** `availability_template` was accepted by the schema but never read by HA's `TemplateEntity`. Maps `availability_template` → `availability` in `__init__` before `super().__init__()`.
-- **Deprecated:** `modes` → `hvac_modes`, `availability_template` → `availability`, `icon_template` → `icon`, `entity_picture_template` → `picture` (deprecated aliases kept, log warning at startup).
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- Added template support for `temp_step`, `precision`, `min_temp`, `max_temp`, `min_humidity`, and `max_humidity`.
+- Fixed `HEAT_COOL` temperature handling.
+- Applied Ruff and code-standardization fixes.
+- **Based in part on:** [@mikopp's unmerged PR #1](https://github.com/mikopp/hass-template-climate/pull/1) and [PR #2](https://github.com/mikopp/hass-template-climate/pull/2), which provided earlier work on template attributes, availability handling, and Home Assistant compatibility.
 
 
-### 2025-08-12 — [PR #29](https://github.com/litinoveweedle/hass-template-climate/pull/29) — Compatibility overhaul for HA 2025.8.0
+### 2026-07-02 — `0.7.7` — Fix template updates
+
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- Fixed an issue where templates did not update correctly after setup or reload.
+
+
+### 2026-06-04 — `v1.4.0` — [PR #141](https://github.com/litinoveweedle/hass-template-climate/pull/141) — Home Assistant 2026.6 compatibility
+
+- **Author:** [@Petro31](https://github.com/Petro31)
+- Updated the integration for Home Assistant 2026.6 compatibility.
+
+
+### 2026-06-02 — `0.7.6` — Preset class
+
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- Refactored preset handling into a dedicated class.
+
+
+### 2026-06-01 — State-update fixes
+
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- Fixed state updates, humidity updates, and a `preset_mode` race condition.
+
+
+### 2025-08-12 — `0.7.4` — [PR #29](https://github.com/litinoveweedle/hass-template-climate/pull/29) — Compatibility overhaul for HA 2025.8.0
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Fixed compatibility with Home Assistant 2025.8.0 API changes.
 
 
-### 2024-07-26 — [PR #25](https://github.com/litinoveweedle/hass-template-climate/pull/25) — Fix heat_cool temperature ranges in UI
+### 2024-07-26 — `0.7.3` — [PR #25](https://github.com/litinoveweedle/hass-template-climate/pull/25) — Fix heat_cool temperature ranges in UI
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Fixed `heat_cool` temperature range handling in the UI.
 
 
-### 2024-06-22 — [PR #23](https://github.com/litinoveweedle/hass-template-climate/pull/23) — Conditional temperature and humidity targets
+### 2024-06-22 — `0.7.2` — [PR #23](https://github.com/litinoveweedle/hass-template-climate/pull/23) — Conditional temperature and humidity targets
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Temperature and humidity targets are now enabled conditionally based on configuration.
 
 
-### 2024-05-14 — [PR #21](https://github.com/litinoveweedle/hass-template-climate/pull/21) — Fix HomeAssistantType deprecation warning
+### 2024-05-14 — `0.7.1` — [PR #21](https://github.com/litinoveweedle/hass-template-climate/pull/21) — Fix HomeAssistantType deprecation warning
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Replaced deprecated `HomeAssistantType` with current type.
@@ -100,13 +111,13 @@ All notable changes across all fork generations are hopefully documented here.
 - Refactored callbacks. Use configuration defaults for modes. Fixed typos in logging.
 
 
-### 2024-04-20 — [PR #11](https://github.com/litinoveweedle/hass-template-climate/pull/11) — Fix "Already running" warning
+### 2024-04-20 — `0.7.0` — [PR #11](https://github.com/litinoveweedle/hass-template-climate/pull/11) — Fix "Already running" warning
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Improved logging messages. Fixed "Already running" for some cases: do not execute script if attribute value has not changed. Full code refactoring and input validation.
 
 
-### 2024-04-06 — [PR #7](https://github.com/litinoveweedle/hass-template-climate/pull/7) — Fix missing context when running script
+### 2024-04-06 — `0.6.4` — [PR #7](https://github.com/litinoveweedle/hass-template-climate/pull/7) — Fix missing context when running script
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Fixed missing context when running scripts. Sourced from [home-assistant/core#113523](https://github.com/home-assistant/core/pull/113523).
@@ -124,7 +135,7 @@ All notable changes across all fork generations are hopefully documented here.
 - Added support for Climate Entity Features flags including `turn_on` and `turn_off` services.
 
 
-### 2023-12-29 — [PR #3](https://github.com/litinoveweedle/hass-template-climate/pull/3) — Add target_humidity and set_humidity
+### 2023-12-29 — `0.6.2` — [PR #3](https://github.com/litinoveweedle/hass-template-climate/pull/3) — Add target_humidity and set_humidity
 
 - **Author:** [@isottipietro](https://github.com/isottipietro)
 - Added `target_humidity` template support and `set_humidity` service call.
@@ -146,17 +157,17 @@ All notable changes across all fork generations are hopefully documented here.
 
 ## [jcwillox/hass-template-climate](https://github.com/jcwillox/hass-template-climate) — original repo history
 
-### 2023-01-28 — [PR #33](https://github.com/jcwillox/hass-template-climate/pull/33) — Allow hvac_action to be None
+### 2023-01-28 — `0.6.1`, `v0.6.1` — [PR #33](https://github.com/jcwillox/hass-template-climate/pull/33) — Allow hvac_action to be None
 
 - **Author:** [@laszlojakab](https://github.com/laszlojakab)
 
 
-### 2022-11-18 — [PR #27](https://github.com/jcwillox/hass-template-climate/pull/27) — Add support for unique_id
+### 2022-11-18 — `0.6.0` — [PR #27](https://github.com/jcwillox/hass-template-climate/pull/27) — Add support for unique_id
 
 - **Author:** [@laszlojakab](https://github.com/laszlojakab)
 
 
-### 2022-11-12 — [PR #24](https://github.com/jcwillox/hass-template-climate/pull/24) — Add support for hvac_action template
+### 2022-11-12 — `0.5.0` — [PR #24](https://github.com/jcwillox/hass-template-climate/pull/24) — Add support for hvac_action template
 
 - **Author:** [@laszlojakab](https://github.com/laszlojakab)
 
@@ -166,7 +177,7 @@ All notable changes across all fork generations are hopefully documented here.
 - **Author:** [@JOHLC](https://github.com/JOHLC)
 
 
-### 2022-06-11 — [PR #7](https://github.com/jcwillox/hass-template-climate/pull/7) — Pass variables to set_* scripts
+### 2022-06-11 — `0.3.0` — [PR #7](https://github.com/jcwillox/hass-template-climate/pull/7) — Pass variables to set_* scripts
 
 - **Author:** Artem Sorokin
 
