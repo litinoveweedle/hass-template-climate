@@ -503,9 +503,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 "Entity '%s' has no hvac mode, at least one hvac mode shall be configured!",
                 self._attr_name,
             )
-            raise ValueError(
-                f"Entity '{self._attr_name}' has no hvac mode configured"
-            )
+            raise ValueError(f"Entity '{self._attr_name}' has no hvac mode configured")
         if self._attr_preset_modes and len(self._attr_preset_modes) >= 2:
             self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
             if not (self._action_preset_mode or self._template_preset_mode):
@@ -844,133 +842,109 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 self._attr_hvac_mode = hvac_mode
 
             if (
-                (value := previous_state.attributes.get(ATTR_PRESET_MODE)) is not None
-                and (
-                    preset_mode := self._validate_value(
-                        "preset_mode",
-                        value,
-                        self._attr_preset_modes,
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_PRESET_MODE)
+            ) is not None and (
+                preset_mode := self._validate_value(
+                    "preset_mode",
+                    value,
+                    self._attr_preset_modes,
+                )
+            ) is not None:
                 self._attr_preset_mode = preset_mode
 
-            if (
-                (value := previous_state.attributes.get(ATTR_FAN_MODE)) is not None
-                and (
-                    fan_mode := self._validate_value(
-                        "fan_mode",
-                        value,
-                        self._attr_fan_modes,
-                    )
-                ) is not None
-            ):
+            if (value := previous_state.attributes.get(ATTR_FAN_MODE)) is not None and (
+                fan_mode := self._validate_value(
+                    "fan_mode",
+                    value,
+                    self._attr_fan_modes,
+                )
+            ) is not None:
                 self._attr_fan_mode = fan_mode
 
             if (
-                (value := previous_state.attributes.get(ATTR_SWING_MODE)) is not None
-                and (
-                    swing_mode := self._validate_value(
-                        "swing_mode",
-                        value,
-                        self._attr_swing_modes,
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_SWING_MODE)
+            ) is not None and (
+                swing_mode := self._validate_value(
+                    "swing_mode",
+                    value,
+                    self._attr_swing_modes,
+                )
+            ) is not None:
                 self._attr_swing_mode = swing_mode
 
             if (
-                (value := previous_state.attributes.get(ATTR_TEMPERATURE)) is not None
-                and (
-                    target_temperature := self._validate_value(
-                        "target_temperature",
-                        value,
-                        "target_temperature",
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_TEMPERATURE)
+            ) is not None and (
+                target_temperature := self._validate_value(
+                    "target_temperature",
+                    value,
+                    "target_temperature",
+                )
+            ) is not None:
                 self._attr_target_temperature = target_temperature
 
             if (
-                (
-                    value := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW)
-                ) is not None
-                and (
-                    target_temperature_low := self._validate_value(
-                        "target_temperature_low",
-                        value,
-                        "target_temperature",
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW)
+            ) is not None and (
+                target_temperature_low := self._validate_value(
+                    "target_temperature_low",
+                    value,
+                    "target_temperature",
+                )
+            ) is not None:
                 self._attr_target_temperature_low = target_temperature_low
 
             if (
-                (value := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH)) is not None
-                and (
-                    target_temperature_high := self._validate_value(
-                        "target_temperature_high",
-                        value,
-                        "target_temperature",
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH)
+            ) is not None and (
+                target_temperature_high := self._validate_value(
+                    "target_temperature_high",
+                    value,
+                    "target_temperature",
+                )
+            ) is not None:
                 self._attr_target_temperature_high = target_temperature_high
 
-            if (
-                (
-                    value := previous_state.attributes.get(ATTR_HUMIDITY)
-                ) is not None
-                and (
-                    target_humidity := self._validate_value(
-                        "target_humidity",
-                        value,
-                        "target_humidity",
-                    )
-                ) is not None
-            ):
+            if (value := previous_state.attributes.get(ATTR_HUMIDITY)) is not None and (
+                target_humidity := self._validate_value(
+                    "target_humidity",
+                    value,
+                    "target_humidity",
+                )
+            ) is not None:
                 self._attr_target_humidity = target_humidity
 
             if (
-                (
-                    value := previous_state.attributes.get(ATTR_CURRENT_TEMPERATURE)
-                ) is not None
-                and (
-                    current_temperature := self._validate_value(
-                        "current_temperature",
-                        value,
-                        "current_temperature",
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+            ) is not None and (
+                current_temperature := self._validate_value(
+                    "current_temperature",
+                    value,
+                    "current_temperature",
+                )
+            ) is not None:
                 self._attr_current_temperature = current_temperature
 
             if (
-                (
-                    value := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY)
-                ) is not None
-                and (
-                    current_humidity := self._validate_value(
-                        "current_humidity",
-                        value,
-                        "current_humidity",
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY)
+            ) is not None and (
+                current_humidity := self._validate_value(
+                    "current_humidity",
+                    value,
+                    "current_humidity",
+                )
+            ) is not None:
                 self._attr_current_humidity = current_humidity
 
             if (
-                (
-                    value := previous_state.attributes.get(ATTR_HVAC_ACTION)
-                ) is not None
-                and (
-                    hvac_action := self._validate_value(
-                        "hvac_action",
-                        value,
-                        [member.value for member in HVACAction],
-                    )
-                ) is not None
-            ):
+                value := previous_state.attributes.get(ATTR_HVAC_ACTION)
+            ) is not None and (
+                hvac_action := self._validate_value(
+                    "hvac_action",
+                    value,
+                    [member.value for member in HVACAction],
+                )
+            ) is not None:
                 self._attr_hvac_action = hvac_action
 
             if (
@@ -1437,7 +1411,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["target_temperature_low"] = float(target_temperature_low)
+                        value[mode]["target_temperature_low"] = float(
+                            target_temperature_low
+                        )
                     else:
                         value[mode]["target_temperature_low"] = None
                     if (
@@ -1451,7 +1427,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["target_temperature_high"] = float(target_temperature_high)
+                        value[mode]["target_temperature_high"] = float(
+                            target_temperature_high
+                        )
                     else:
                         value[mode]["target_temperature_high"] = None
 
@@ -1698,7 +1676,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             min_humidity,
         )
         if (
-            value := self._validate_value("min_humidity", min_humidity, "target_humidity")
+            value := self._validate_value(
+                "min_humidity", min_humidity, "target_humidity"
+            )
         ) is not None:
             self._attr_min_humidity = value
             self.async_write_ha_state()
@@ -1712,7 +1692,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             max_humidity,
         )
         if (
-            value := self._validate_value("max_humidity", max_humidity, "target_humidity")
+            value := self._validate_value(
+                "max_humidity", max_humidity, "target_humidity"
+            )
         ) is not None:
             self._attr_max_humidity = value
             self.async_write_ha_state()
@@ -2023,11 +2005,20 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 "target_temperature_high",
             ]
         ):
-            if "target_temperature" in preset and preset["target_temperature"] is not None:
+            if (
+                "target_temperature" in preset
+                and preset["target_temperature"] is not None
+            ):
                 attributes[ATTR_TEMPERATURE] = preset["target_temperature"]
-            if "target_temperature_low" in preset and preset["target_temperature_low"] is not None:
+            if (
+                "target_temperature_low" in preset
+                and preset["target_temperature_low"] is not None
+            ):
                 attributes[ATTR_TARGET_TEMP_LOW] = preset["target_temperature_low"]
-            if "target_temperature_high" in preset and preset["target_temperature_high"] is not None:
+            if (
+                "target_temperature_high" in preset
+                and preset["target_temperature_high"] is not None
+            ):
                 attributes[ATTR_TARGET_TEMP_HIGH] = preset["target_temperature_high"]
             if "hvac_mode" in preset and preset["hvac_mode"] is not None:
                 attributes[ATTR_HVAC_MODE] = preset["hvac_mode"]
