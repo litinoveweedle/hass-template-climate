@@ -1,49 +1,39 @@
 """Support for Template climates."""
 
 import logging
-
 from enum import IntFlag
 from typing import Any, TypedDict
 
-import voluptuous as vol
-
+import homeassistant.helpers.config_validation as cv
+import voluptuous as vol  # type: ignore
 from homeassistant.components.climate import (
-    ClimateEntity,
-    ClimateEntityFeature,
-    ENTITY_ID_FORMAT,
     DOMAIN as CLIMATE_DOMAIN,
 )
+from homeassistant.components.climate import (
+    ENTITY_ID_FORMAT,
+    ClimateEntity,
+    ClimateEntityFeature,
+)
 from homeassistant.components.climate.const import (
-    DEFAULT_MAX_TEMP,
-    DEFAULT_MIN_TEMP,
-    DEFAULT_MAX_HUMIDITY,
-    DEFAULT_MIN_HUMIDITY,
+    ATTR_CURRENT_HUMIDITY,
+    ATTR_CURRENT_TEMPERATURE,
+    ATTR_FAN_MODE,
+    ATTR_HUMIDITY,
+    ATTR_HVAC_ACTION,
     ATTR_HVAC_MODE,
     ATTR_PRESET_MODE,
-    ATTR_FAN_MODE,
     ATTR_SWING_MODE,
-    ATTR_CURRENT_TEMPERATURE,
-    ATTR_CURRENT_HUMIDITY,
-    ATTR_HVAC_ACTION,
-    ATTR_HUMIDITY,
     ATTR_TARGET_TEMP_HIGH,
     ATTR_TARGET_TEMP_LOW,
-    FAN_OFF,
-    FAN_AUTO,
+    DEFAULT_MAX_HUMIDITY,
+    DEFAULT_MAX_TEMP,
+    DEFAULT_MIN_HUMIDITY,
+    DEFAULT_MIN_TEMP,
     FAN_LOW,
-    FAN_MEDIUM,
-    FAN_HIGH,
-    SWING_OFF,
-    SWING_ON,
-    PRESET_ACTIVITY,
-    PRESET_AWAY,
-    PRESET_BOOST,
     PRESET_COMFORT,
-    PRESET_ECO,
-    PRESET_HOME,
-    PRESET_SLEEP,
-    HVACMode,
+    SWING_OFF,
     HVACAction,
+    HVACMode,
 )
 from homeassistant.components.template.const import (
     CONF_AVAILABILITY,
@@ -54,9 +44,10 @@ from homeassistant.components.template.const import (
 from homeassistant.components.template.helpers import (
     async_create_template_tracking_entities,
 )
-from homeassistant.components.template.schemas import make_template_entity_base_schema
+from homeassistant.components.template.schemas import (
+    make_template_entity_common_modern_attributes_schema,
+)
 from homeassistant.components.template.template_entity import TemplateEntity
-from homeassistant.exceptions import TemplateError
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_TEMPERATURE,
@@ -70,14 +61,12 @@ from homeassistant.const import (
     PRECISION_HALVES,
     PRECISION_TENTHS,
     PRECISION_WHOLE,
-    STATE_OFF,
-    STATE_ON,
-    STATE_UNKNOWN,
     STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
-from homeassistant.core import HomeAssistant, Context, callback
+from homeassistant.core import Context, HomeAssistant, callback
+from homeassistant.exceptions import TemplateError
 from homeassistant.helpers import template
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -112,6 +101,12 @@ CONF_PRESET_MODE_TEMPLATE = "preset_mode_template"
 CONF_SWING_MODE_TEMPLATE = "swing_mode_template"
 CONF_HVAC_ACTION_TEMPLATE = "hvac_action_template"
 CONF_PRESETS_TEMPLATE = "presets_template"
+CONF_TEMPERATURE_MIN_TEMPLATE = "min_temp_template"
+CONF_TEMPERATURE_MAX_TEMPLATE = "max_temp_template"
+CONF_HUMIDITY_MIN_TEMPLATE = "min_humidity_template"
+CONF_HUMIDITY_MAX_TEMPLATE = "max_humidity_template"
+CONF_PRECISION_TEMPLATE = "precision_template"
+CONF_TEMP_STEP_TEMPLATE = "temp_step_template"
 
 CONF_SET_TEMPERATURE_ACTION = "set_temperature"
 CONF_SET_HUMIDITY_ACTION = "set_humidity"
@@ -143,6 +138,7 @@ PLATFORMS = ["climate"]
 class ClimateEntityPresetFeature(IntFlag):
     """Supported presets features of the climate_template entity."""
 
+    NONE = 0
     EDITABLE = 1
     PRESERVED = 2
     HVAC_MODE = 4
@@ -156,17 +152,19 @@ class ClimateEntityPresetFeature(IntFlag):
 class ClimateEntityPresetValues(TypedDict, total=False):
     """Typed mapping for a single preset mode payload."""
 
-    hvac_mode: str
-    fan_mode: str
-    swing_mode: str
-    target_temperature: float
-    target_temperature_low: float
-    target_temperature_high: float
-    target_humidity: int
+    hvac_mode: str | None
+    fan_mode: str | None
+    swing_mode: str | None
+    target_temperature: float | None
+    target_temperature_low: float | None
+    target_temperature_high: float | None
+    target_humidity: int | None
 
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    make_template_entity_base_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema
+    make_template_entity_common_modern_attributes_schema(
+        CLIMATE_DOMAIN, DEFAULT_NAME
+    ).schema
 ).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
@@ -184,6 +182,12 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SWING_MODE_TEMPLATE): cv.template,
         vol.Optional(CONF_HVAC_ACTION_TEMPLATE): cv.template,
         vol.Optional(CONF_PRESETS_TEMPLATE): cv.template,
+        vol.Optional(CONF_TEMPERATURE_MIN_TEMPLATE): cv.template,
+        vol.Optional(CONF_TEMPERATURE_MAX_TEMPLATE): cv.template,
+        vol.Optional(CONF_HUMIDITY_MIN_TEMPLATE): cv.template,
+        vol.Optional(CONF_HUMIDITY_MAX_TEMPLATE): cv.template,
+        vol.Optional(CONF_PRECISION_TEMPLATE): cv.template,
+        vol.Optional(CONF_TEMP_STEP_TEMPLATE): cv.template,
         vol.Optional(CONF_SET_TEMPERATURE_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HUMIDITY_ACTION): cv.SCRIPT_SCHEMA,
         vol.Optional(CONF_SET_HVAC_MODE_ACTION): cv.SCRIPT_SCHEMA,
@@ -308,7 +312,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         super().__init__(hass, config, unique_id)
         self._config = config
 
-        self._attr_supported_features = 0
+        self._attr_name: str = config.get(CONF_FRIENDLY_NAME) or "Template Climate"
+        self._attr_supported_features = ClimateEntityFeature(0)
         self._attr_temperature_unit = hass.config.units.temperature_unit
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
         self._attr_mode_action = config[CONF_MODE_ACTION]
@@ -317,18 +322,10 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_max_temp = config[CONF_TEMPERATURE_MAX]
         self._attr_min_humidity = config[CONF_HUMIDITY_MIN]
         self._attr_max_humidity = config[CONF_HUMIDITY_MAX]
-        self._attr_hvac_modes = list(
-            map(lambda item: str(item), config[CONF_HVAC_MODE_LIST]),
-        )
-        self._attr_fan_modes = list(
-            map(lambda item: str(item), config[CONF_FAN_MODE_LIST]),
-        )
-        self._attr_preset_modes = list(
-            map(lambda item: str(item), config[CONF_PRESET_MODE_LIST]),
-        )
-        self._attr_swing_modes = list(
-            map(lambda item: str(item), config[CONF_SWING_MODE_LIST]),
-        )
+        self._attr_hvac_modes = [HVACMode(item) for item in config[CONF_HVAC_MODE_LIST]]
+        self._attr_fan_modes = [str(item) for item in config[CONF_FAN_MODE_LIST]]
+        self._attr_preset_modes = [str(item) for item in config[CONF_PRESET_MODE_LIST]]
+        self._attr_swing_modes = [str(item) for item in config[CONF_SWING_MODE_LIST]]
         self._attr_current_temperature = None
         self._attr_current_humidity = None
         self._attr_hvac_action = None
@@ -352,6 +349,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._template_current_humidity = config.get(
             CONF_CURRENT_HUMIDITY_TEMPLATE,
         )
+        self._template_min_temp = config.get(CONF_TEMPERATURE_MIN_TEMPLATE)
+        self._template_max_temp = config.get(CONF_TEMPERATURE_MAX_TEMPLATE)
+        self._template_min_humidity = config.get(CONF_HUMIDITY_MIN_TEMPLATE)
+        self._template_max_humidity = config.get(CONF_HUMIDITY_MAX_TEMPLATE)
+        self._template_precision = config.get(CONF_PRECISION_TEMPLATE)
+        self._template_temp_step = config.get(CONF_TEMP_STEP_TEMPLATE)
         self._template_target_temperature = config.get(
             CONF_TARGET_TEMPERATURE_TEMPLATE,
         )
@@ -376,7 +379,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._presets: dict[str, ClimateEntityPresetValues] = {}
         self._off_mode: dict[str, str] = {}
         self._last_on_mode: dict[str, str] = {}
-        self._presets_features = config.get(CONF_PRESETS_FEATURES)
+        self._presets_features = ClimateEntityPresetFeature(
+            config.get(CONF_PRESETS_FEATURES, ClimateEntityPresetFeature.NONE)
+        )
 
         # Init scripts callbacks.
         self._script_hvac_mode = None
@@ -400,9 +405,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 if HVACMode.AUTO in self._attr_hvac_modes:
                     self._last_on_mode["hvac_mode"] = HVACMode.AUTO
                 elif len(self._attr_hvac_modes) == 2:
-                    self._last_on_mode["hvac_mode"] = list(
+                    self._last_on_mode["hvac_mode"] = next(
                         filter(lambda item: item != HVACMode.OFF, self._attr_hvac_modes)
-                    )[0]
+                    )
                 else:
                     self._last_on_mode["hvac_mode"] = HVACMode.OFF
             if (
@@ -419,8 +424,9 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 "Entity '%s' has no hvac mode, at least one hvac mode shall be configured!",
                 self._attr_name,
             )
-            return False
-
+            raise ValueError(
+                f"Entity '{self._attr_name}' has no hvac mode configured"
+            )
         if self._attr_preset_modes and len(self._attr_preset_modes) >= 2:
             self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
             if not (self._action_preset_mode or self._template_preset_mode):
@@ -445,8 +451,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 _LOGGER.warning(
                     "Entity '%s' has less than two preset mode configured, but there are preset_features configured.",
                     self._attr_name,
-                    CONF_SET_PRESET_MODE_ACTION,
-                    CONF_PRESET_MODE_TEMPLATE,
                 )
                 self._presets = {}
 
@@ -573,12 +577,8 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
 
         if any(
-            list(
-                map(
-                    lambda var: var in self._attr_hvac_modes,
-                    [HVACMode.AUTO, HVACMode.HEAT, HVACMode.COOL],
-                )
-            )
+            mode in self._attr_hvac_modes
+            for mode in (HVACMode.AUTO, HVACMode.HEAT, HVACMode.COOL)
         ):
             if (
                 self._action_temperature
@@ -594,24 +594,24 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     CONF_SET_TEMPERATURE_ACTION,
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
                 )
-        else:
+        elif HVACMode.HEAT_COOL not in self._attr_hvac_modes:
             if self._action_temperature:
                 _LOGGER.warning(
-                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is action '%s' configured.",
+                    "Entity '%s' has no hvac mode auto, heat, cool or heat_cool configured, but there is action '%s' configured.",
                     self._attr_name,
                     CONF_SET_TEMPERATURE_ACTION,
                 )
                 self._action_temperature = None
             if self._template_target_temperature:
                 _LOGGER.warning(
-                    "Entity '%s' has no hvac mode auto, heat or cool configured, but there is template '%s' configured.",
+                    "Entity '%s' has no hvac mode auto, heat, cool or heat_cool configured, but there is template '%s' configured.",
                     self._attr_name,
                     CONF_TARGET_TEMPERATURE_TEMPLATE,
                 )
                 self._template_target_temperature = None
             if self._presets_features & ClimateEntityPresetFeature.TARGET_TEMPERATURE:
                 _LOGGER.warning(
-                    "Entity '%s' has no hvac mode auto, heat or cool configured, but preset_features.target_temperature is set.",
+                    "Entity '%s' has no hvac mode auto, heat, cool or heat_cool configured, but preset_features.target_temperature is set.",
                     self._attr_name,
                 )
                 self._presets_features ^= ClimateEntityPresetFeature.TARGET_TEMPERATURE
@@ -644,7 +644,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._attr_name,
                     CONF_TARGET_HUMIDITY_TEMPLATE,
                 )
-                self._action_humidity = None
+                self._template_target_humidity = None
             if self._presets_features & ClimateEntityPresetFeature.TARGET_HUMIDITY:
                 _LOGGER.warning(
                     "Entity '%s' has no hvac mode dry configured, but preset_features.target_humidity is set.",
@@ -764,113 +764,135 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             ) is not None:
                 self._attr_hvac_mode = hvac_mode
 
-            if (value := previous_state.attributes.get(ATTR_PRESET_MODE)) is not None:
-                if (
+            if (
+                (value := previous_state.attributes.get(ATTR_PRESET_MODE)) is not None
+                and (
                     preset_mode := self._validate_value(
                         "preset_mode",
                         value,
                         self._attr_preset_modes,
                     )
-                ) is not None:
-                    self._attr_preset_mode = preset_mode
+                ) is not None
+            ):
+                self._attr_preset_mode = preset_mode
 
-            if (value := previous_state.attributes.get(ATTR_FAN_MODE)) is not None:
-                if (
+            if (
+                (value := previous_state.attributes.get(ATTR_FAN_MODE)) is not None
+                and (
                     fan_mode := self._validate_value(
                         "fan_mode",
                         value,
                         self._attr_fan_modes,
                     )
-                ) is not None:
-                    self._attr_fan_mode = fan_mode
+                ) is not None
+            ):
+                self._attr_fan_mode = fan_mode
 
-            if (value := previous_state.attributes.get(ATTR_SWING_MODE)) is not None:
-                if (
+            if (
+                (value := previous_state.attributes.get(ATTR_SWING_MODE)) is not None
+                and (
                     swing_mode := self._validate_value(
                         "swing_mode",
                         value,
                         self._attr_swing_modes,
                     )
-                ) is not None:
-                    self._attr_swing_mode = swing_mode
+                ) is not None
+            ):
+                self._attr_swing_mode = swing_mode
 
-            if (value := previous_state.attributes.get(ATTR_TEMPERATURE)) is not None:
-                if (
+            if (
+                (value := previous_state.attributes.get(ATTR_TEMPERATURE)) is not None
+                and (
                     target_temperature := self._validate_value(
                         "target_temperature",
                         value,
                         "target_temperature",
                     )
-                ) is not None:
-                    self._attr_target_temperature = target_temperature
+                ) is not None
+            ):
+                self._attr_target_temperature = target_temperature
 
             if (
-                value := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW)
-            ) is not None:
-                if (
+                (
+                    value := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW)
+                ) is not None
+                and (
                     target_temperature_low := self._validate_value(
                         "target_temperature_low",
                         value,
                         "target_temperature",
                     )
-                ) is not None:
-                    self._attr_target_temperature_low = target_temperature_low
+                ) is not None
+            ):
+                self._attr_target_temperature_low = target_temperature_low
 
             if (
-                value := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH)
-            ) is not None:
-                if (
+                (value := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH)) is not None
+                and (
                     target_temperature_high := self._validate_value(
                         "target_temperature_high",
                         value,
                         "target_temperature",
                     )
-                ) is not None:
-                    self._attr_target_temperature_high = target_temperature_high
+                ) is not None
+            ):
+                self._attr_target_temperature_high = target_temperature_high
 
-            if (value := previous_state.attributes.get(ATTR_HUMIDITY)) is not None:
-                if (
+            if (
+                (
+                    value := previous_state.attributes.get(ATTR_HUMIDITY)
+                ) is not None
+                and (
                     target_humidity := self._validate_value(
                         "target_humidity",
                         value,
                         "target_humidity",
                     )
-                ) is not None:
-                    self._attr_target_humidity = target_humidity
+                ) is not None
+            ):
+                self._attr_target_humidity = target_humidity
 
             if (
-                value := previous_state.attributes.get(ATTR_CURRENT_TEMPERATURE)
-            ) is not None:
-                if (
+                (
+                    value := previous_state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+                ) is not None
+                and (
                     current_temperature := self._validate_value(
                         "current_temperature",
                         value,
                         "current_temperature",
                     )
-                ) is not None:
-                    self._attr_current_temperature = current_temperature
+                ) is not None
+            ):
+                self._attr_current_temperature = current_temperature
 
             if (
-                value := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY)
-            ) is not None:
-                if (
+                (
+                    value := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY)
+                ) is not None
+                and (
                     current_humidity := self._validate_value(
                         "current_humidity",
                         value,
                         "current_humidity",
                     )
-                ) is not None:
-                    self._attr_current_humidity = current_humidity
+                ) is not None
+            ):
+                self._attr_current_humidity = current_humidity
 
-            if (value := previous_state.attributes.get(ATTR_HVAC_ACTION)) is not None:
-                if (
+            if (
+                (
+                    value := previous_state.attributes.get(ATTR_HVAC_ACTION)
+                ) is not None
+                and (
                     hvac_action := self._validate_value(
                         "hvac_action",
                         value,
                         [member.value for member in HVACAction],
                     )
-                ) is not None:
-                    self._attr_hvac_action = hvac_action
+                ) is not None
+            ):
+                self._attr_hvac_action = hvac_action
 
             if (
                 value := previous_state.attributes.get("last_on_mode")
@@ -1002,6 +1024,60 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 none_on_template_error=True,
             )
 
+        if self._template_min_temp:
+            self.add_template_attribute(
+                "_min_temp",
+                self._template_min_temp,
+                None,
+                self._update_min_temp,
+                none_on_template_error=True,
+            )
+
+        if self._template_max_temp:
+            self.add_template_attribute(
+                "_max_temp",
+                self._template_max_temp,
+                None,
+                self._update_max_temp,
+                none_on_template_error=True,
+            )
+
+        if self._template_min_humidity:
+            self.add_template_attribute(
+                "_min_humidity",
+                self._template_min_humidity,
+                None,
+                self._update_min_humidity,
+                none_on_template_error=True,
+            )
+
+        if self._template_max_humidity:
+            self.add_template_attribute(
+                "_max_humidity",
+                self._template_max_humidity,
+                None,
+                self._update_max_humidity,
+                none_on_template_error=True,
+            )
+
+        if self._template_precision:
+            self.add_template_attribute(
+                "_precision",
+                self._template_precision,
+                None,
+                self._update_precision,
+                none_on_template_error=True,
+            )
+
+        if self._template_temp_step:
+            self.add_template_attribute(
+                "_target_temperature_step",
+                self._template_temp_step,
+                None,
+                self._update_temp_step,
+                none_on_template_error=True,
+            )
+
         # Template attributes are registered dynamically here, after the
         # parent async_added_to_hass has already run.
         # Explicitly start template tracking so callbacks are evaluated and
@@ -1068,19 +1144,20 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     )
                     return None
             elif format == "target_temperature":
-                try:
-                    value = (
-                        round(float(value) / self._attr_target_temperature_step)
-                        * self._attr_target_temperature_step
-                    )
-                except ValueError:
-                    _LOGGER.error(
-                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer or float.",
-                        self._attr_name,
-                        attr,
-                        value,
-                    )
-                    return None
+                if self._attr_target_temperature_step is not None:
+                    try:
+                        value = (
+                            round(float(value) / self._attr_target_temperature_step)
+                            * self._attr_target_temperature_step
+                        )
+                    except ValueError:
+                        _LOGGER.error(
+                            "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer or float.",
+                            self._attr_name,
+                            attr,
+                            value,
+                        )
+                        return None
                 if value > self._attr_max_temp:
                     _LOGGER.error(
                         "Entity '%s' attribute '%s' returned invalid value: '%s', which is bigger than max setpoint: '%s'.",
@@ -1139,6 +1216,35 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         self._attr_min_humidity,
                     )
                     return None
+            elif format == "precision":
+                if value not in (PRECISION_HALVES, PRECISION_TENTHS, PRECISION_WHOLE):
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected one of: '%s'.",
+                        self._attr_name,
+                        attr,
+                        value,
+                        [PRECISION_TENTHS, PRECISION_HALVES, PRECISION_WHOLE],
+                    )
+                    return None
+            elif format == "temp_step":
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer or float.",
+                        self._attr_name,
+                        attr,
+                        value,
+                    )
+                    return None
+                if value <= 0:
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected a positive number.",
+                        self._attr_name,
+                        attr,
+                        value,
+                    )
+                    return None
             else:
                 _LOGGER.debug(
                     "Entity '%s' attribute '%s' test called with invalid format: '%s'.",
@@ -1166,7 +1272,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             presets = {}
 
         value: dict[str, ClimateEntityPresetValues] = {}
-        for mode in self._attr_preset_modes:
+        for mode in self._attr_preset_modes or []:
             if mode in presets and isinstance(presets[mode], dict) and presets[mode]:
                 if mode not in value:
                     value[mode] = {}
@@ -1182,7 +1288,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["hvac_mode"] = hvac_mode
+                        value[mode]["hvac_mode"] = str(hvac_mode)
                     else:
                         value[mode]["hvac_mode"] = None
 
@@ -1198,7 +1304,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["fan_mode"] = fan_mode
+                        value[mode]["fan_mode"] = str(fan_mode)
                     else:
                         value[mode]["fan_mode"] = None
 
@@ -1214,7 +1320,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["swing_mode"] = swing_mode
+                        value[mode]["swing_mode"] = str(swing_mode)
                     else:
                         value[mode]["swing_mode"] = None
 
@@ -1233,7 +1339,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["target_temperature"] = target_temperature
+                        value[mode]["target_temperature"] = float(target_temperature)
                     else:
                         value[mode]["target_temperature"] = None
 
@@ -1252,7 +1358,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["target_temperature_low"] = target_temperature_low
+                        value[mode]["target_temperature_low"] = float(target_temperature_low)
                     else:
                         value[mode]["target_temperature_low"] = None
                     if (
@@ -1266,7 +1372,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["target_temperature_high"] = target_temperature_high
+                        value[mode]["target_temperature_high"] = float(target_temperature_high)
                     else:
                         value[mode]["target_temperature_high"] = None
 
@@ -1282,7 +1388,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         )
                         is not None
                     ):
-                        value[mode]["target_humidity"] = target_humidity
+                        value[mode]["target_humidity"] = int(target_humidity)
                     else:
                         value[mode]["target_humidity"] = None
             else:
@@ -1476,35 +1582,119 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._attr_hvac_action = value
             self.async_write_ha_state()
 
+    @callback
+    def _update_min_temp(self, min_temp: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TEMPERATURE_MIN_TEMPLATE,
+            min_temp,
+        )
+        if (
+            value := self._validate_value("min_temp", min_temp, "target_temperature")
+        ) is not None:
+            self._attr_min_temp = value
+            self.async_write_ha_state()
+
+    @callback
+    def _update_max_temp(self, max_temp: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TEMPERATURE_MAX_TEMPLATE,
+            max_temp,
+        )
+        if (
+            value := self._validate_value("max_temp", max_temp, "target_temperature")
+        ) is not None:
+            self._attr_max_temp = value
+            self.async_write_ha_state()
+
+    @callback
+    def _update_min_humidity(self, min_humidity: int):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_HUMIDITY_MIN_TEMPLATE,
+            min_humidity,
+        )
+        if (
+            value := self._validate_value("min_humidity", min_humidity, "target_humidity")
+        ) is not None:
+            self._attr_min_humidity = value
+            self.async_write_ha_state()
+
+    @callback
+    def _update_max_humidity(self, max_humidity: int):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_HUMIDITY_MAX_TEMPLATE,
+            max_humidity,
+        )
+        if (
+            value := self._validate_value("max_humidity", max_humidity, "target_humidity")
+        ) is not None:
+            self._attr_max_humidity = value
+            self.async_write_ha_state()
+
+    @callback
+    def _update_precision(self, precision: str):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_PRECISION_TEMPLATE,
+            precision,
+        )
+        if (
+            value := self._validate_value("precision", precision, "precision")
+        ) is not None:
+            self._attr_precision = value
+            self.async_write_ha_state()
+
+    @callback
+    def _update_temp_step(self, temp_step: float):
+        _LOGGER.debug(
+            "Entity '%s' template '%s' triggered with attribute value: '%s'.",
+            self._attr_name,
+            CONF_TEMP_STEP_TEMPLATE,
+            temp_step,
+        )
+        if (
+            value := self._validate_value("temp_step", temp_step, "temp_step")
+        ) is not None:
+            self._attr_target_temperature_step = value
+            self.async_write_ha_state()
+
     async def _async_set_attribute(
         self, action: str, attributes: dict[str, dict[str, Any]]
     ) -> bool:
         presets = {}
         variables = {}
-        for attr in attributes:
+        for attr, attr_data in attributes.items():
             # Validate input values
             if (
                 value := self._validate_value(
-                    attr, attributes[attr]["value"], attributes[attr]["format"]
+                    attr, attr_data["value"], attr_data["format"]
                 )
             ) is not None:
-                attributes[attr]["value"] = value
+                attr_data["value"] = value
             else:
                 _LOGGER.debug(
                     "Entity '%s' attribute '%s' update called with invalid value: '%s'.",
                     self._attr_name,
                     attr,
-                    attributes[attr]["value"],
+                    attr_data["value"],
                 )
                 return False
 
-            if getattr(self, "_attr_" + attr) == attributes[attr]["value"]:
+            if getattr(self, "_attr_" + attr) == attr_data["value"]:
                 # Nothing to do.
                 _LOGGER.debug(
                     "Entity '%s' attribute '%s' is already set to value: '%s'.",
                     self._attr_name,
                     attr,
-                    attributes[attr]["value"],
+                    attr_data["value"],
                 )
             else:
                 # Update entity attribute.
@@ -1512,17 +1702,17 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     "Entity '%s' updating attribute '%s' to value: '%s'.",
                     self._attr_name,
                     attr,
-                    attributes[attr]["value"],
+                    attr_data["value"],
                 )
-                setattr(self, "_attr_" + attr, attributes[attr]["value"])
+                setattr(self, "_attr_" + attr, attr_data["value"])
                 # Update last_on modes if not off mode.
                 if (
                     attr in self._off_mode
-                    and attributes[attr]["value"] != self._off_mode[attr]
+                    and attr_data["value"] != self._off_mode[attr]
                 ):
-                    self._last_on_mode[attr] = attributes[attr]["value"]
+                    self._last_on_mode[attr] = attr_data["value"]
                 # Set script variable
-                variables[attributes[attr]["attr"]] = attributes[attr]["value"]
+                variables[attr_data["attr"]] = attr_data["value"]
                 # Update presets if defined.
                 if (
                     self._presets
@@ -1530,14 +1720,12 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     and self._attr_preset_mode in self._presets
                     and attr in self._presets[self._attr_preset_mode]
                     and self._presets[self._attr_preset_mode][attr]
-                    != attributes[attr]["value"]
+                    != attr_data["value"]
                 ):
                     if self._attr_preset_mode not in presets:
                         presets[self._attr_preset_mode] = {}
-                    presets[self._attr_preset_mode][attr] = attributes[attr]["value"]
-                    self._presets[self._attr_preset_mode][attr] = attributes[attr][
-                        "value"
-                    ]
+                    presets[self._attr_preset_mode][attr] = attr_data["value"]
+                    self._presets[self._attr_preset_mode][attr] = attr_data["value"]
 
         self.async_write_ha_state()
 
@@ -1619,6 +1807,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
     def extra_state_attributes(self):
         """Platform specific attributes."""
         return {
+            **(self._attr_extra_state_attributes or {}),
             "presets": self._presets,
             "last_on_mode": self._last_on_mode,
             "off_mode": self._off_mode,
@@ -1755,20 +1944,20 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 "target_temperature_high",
             ]
         ):
-            if "target_temperature" in preset:
+            if "target_temperature" in preset and preset["target_temperature"] is not None:
                 attributes[ATTR_TEMPERATURE] = preset["target_temperature"]
-            if "target_temperature_low" in preset:
+            if "target_temperature_low" in preset and preset["target_temperature_low"] is not None:
                 attributes[ATTR_TARGET_TEMP_LOW] = preset["target_temperature_low"]
-            if "target_temperature_high" in preset:
+            if "target_temperature_high" in preset and preset["target_temperature_high"] is not None:
                 attributes[ATTR_TARGET_TEMP_HIGH] = preset["target_temperature_high"]
-            if "hvac_mode" in preset:
+            if "hvac_mode" in preset and preset["hvac_mode"] is not None:
                 attributes[ATTR_HVAC_MODE] = preset["hvac_mode"]
             await self.async_set_temperature(**attributes)
-        elif "hvac_mode" in preset:
+        elif "hvac_mode" in preset and preset["hvac_mode"] is not None:
             await self.async_set_hvac_mode(**{ATTR_HVAC_MODE: preset["hvac_mode"]})
-        if "fan_mode" in preset:
+        if "fan_mode" in preset and preset["fan_mode"] is not None:
             await self.async_set_fan_mode(**{ATTR_FAN_MODE: preset["fan_mode"]})
-        if "swing_mode" in preset:
+        if "swing_mode" in preset and preset["swing_mode"] is not None:
             await self.async_set_swing_mode(**{ATTR_SWING_MODE: preset["swing_mode"]})
-        if "target_humidity" in preset:
+        if "target_humidity" in preset and preset["target_humidity"] is not None:
             await self.async_set_humidity(**{ATTR_HUMIDITY: preset["target_humidity"]})
