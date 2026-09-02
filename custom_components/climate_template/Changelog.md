@@ -4,7 +4,7 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
-### 2026-09-02 — [PR #43](https://github.com/litinoveweedle/hass-template-climate/pull/43) — Custom icons and translations
+### 2026-09-02 — `0.8.0` [PR #43](https://github.com/litinoveweedle/hass-template-climate/pull/43) — Custom icons and translations
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
 - Added configuration-driven generation of Home Assistant icon translations for `hvac_mode`, `fan_mode`, `preset_mode`, and `swing_mode`.
