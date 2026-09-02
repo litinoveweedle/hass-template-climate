@@ -91,6 +91,7 @@ CONF_MODE_ACTION = "mode_action"
 CONF_MAX_ACTION = "max_action"
 CONF_PRESETS_FEATURES = "presets_features"
 CONF_ICONS = "icons"
+CONF_TRANSLATIONS = "translations"
 
 CONF_CURRENT_TEMPERATURE_TEMPLATE = "current_temperature_template"
 CONF_CURRENT_HUMIDITY_TEMPLATE = "current_humidity_template"
@@ -188,6 +189,30 @@ ICONS_SCHEMA = vol.Schema(
     }
 )
 
+# Mirrors the entity.climate.<translation_key> block of translations/<lang>.json.
+# Unlike icons, text translations have no "default" fallback, only exact
+# per-value "state" maps, plus an optional "name" for the entity itself.
+TRANSLATION_ATTRIBUTE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("state"): {cv.string: cv.string},
+    }
+)
+TRANSLATION_SCHEMA = vol.Schema(
+    {
+        vol.Optional("name"): cv.string,
+        vol.Optional("state"): {cv.string: cv.string},
+        vol.Optional("state_attributes"): vol.Schema(
+            {
+                vol.Optional(ATTR_FAN_MODE): TRANSLATION_ATTRIBUTE_SCHEMA,
+                vol.Optional(ATTR_PRESET_MODE): TRANSLATION_ATTRIBUTE_SCHEMA,
+                vol.Optional(ATTR_SWING_MODE): TRANSLATION_ATTRIBUTE_SCHEMA,
+            }
+        ),
+    }
+)
+# Keyed by language code, e.g. {"en": {...}, "cs": {...}}.
+TRANSLATIONS_SCHEMA = vol.Schema({cv.string: TRANSLATION_SCHEMA})
+
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
     make_template_entity_common_modern_attributes_schema(
         CLIMATE_DOMAIN, DEFAULT_NAME
@@ -252,6 +277,7 @@ PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
             CONF_PRESETS_FEATURES, default=DEFAULT_PRESETS_FEATURES
         ): cv.positive_int,
         vol.Optional(CONF_ICONS): ICONS_SCHEMA,
+        vol.Optional(CONF_TRANSLATIONS): TRANSLATIONS_SCHEMA,
     }
 )
 
