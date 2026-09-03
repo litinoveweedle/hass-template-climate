@@ -44,9 +44,16 @@ from homeassistant.components.template.const import (
 from homeassistant.components.template.helpers import (
     async_create_template_tracking_entities,
 )
-from homeassistant.components.template.schemas import (
-    make_template_entity_common_modern_attributes_schema,
-)
+
+try:
+    from homeassistant.components.template.schemas import (
+        make_template_entity_common_schema,
+    )
+except ImportError:
+    # Fallback for older Home Assistant versions.
+    from homeassistant.components.template.schemas import (
+        make_template_entity_common_modern_attributes_schema as make_template_entity_common_schema,
+    )
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -214,9 +221,7 @@ TRANSLATION_SCHEMA = vol.Schema(
 TRANSLATIONS_SCHEMA = vol.Schema({cv.string: TRANSLATION_SCHEMA})
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    make_template_entity_common_modern_attributes_schema(
-        CLIMATE_DOMAIN, DEFAULT_NAME
-    ).schema
+    make_template_entity_common_schema(CLIMATE_DOMAIN, DEFAULT_NAME).schema
 ).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
