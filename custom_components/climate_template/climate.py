@@ -7,9 +7,6 @@ from typing import Any, TypedDict
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol  # type: ignore
 from homeassistant.components.climate import (
-    DOMAIN as CLIMATE_DOMAIN,
-)
-from homeassistant.components.climate import (
     ENTITY_ID_FORMAT,
     ClimateEntity,
     ClimateEntityFeature,
@@ -44,9 +41,7 @@ from homeassistant.components.template.const import (
 from homeassistant.components.template.helpers import (
     async_create_template_tracking_entities,
 )
-from homeassistant.components.template.schemas import (
-    make_template_entity_common_modern_attributes_schema,
-)
+from homeassistant.components.template.schemas import make_template_entity_common_schema
 from homeassistant.components.template.template_entity import TemplateEntity
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -64,6 +59,7 @@ from homeassistant.const import (
     PRECISION_WHOLE,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
+    Platform,
 )
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import TemplateError
@@ -136,7 +132,6 @@ DEFAULT_MODE_ACTION = "single"
 DEFAULT_MAX_ACTION = 1
 DEFAULT_PRESETS_FEATURES = 0
 DOMAIN = "climate_template"
-PLATFORMS = ["climate"]
 
 
 class ClimateEntityPresetFeature(IntFlag):
@@ -214,9 +209,7 @@ TRANSLATION_SCHEMA = vol.Schema(
 TRANSLATIONS_SCHEMA = vol.Schema({cv.string: TRANSLATION_SCHEMA})
 
 PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA.extend(
-    make_template_entity_common_modern_attributes_schema(
-        CLIMATE_DOMAIN, DEFAULT_NAME
-    ).schema
+    make_template_entity_common_schema(Platform.CLIMATE, DEFAULT_NAME).schema
 ).extend(
     {
         vol.Optional(CONF_AVAILABILITY_TEMPLATE): cv.template,
@@ -387,7 +380,7 @@ async def async_setup_platform(
 ):
     """Set up the Template Climate."""
     if discovery_info is None:
-        await async_setup_reload_service(hass, DOMAIN, [CLIMATE_DOMAIN])
+        await async_setup_reload_service(hass, DOMAIN, [Platform.CLIMATE])
         async_create_template_tracking_entities(
             TemplateClimate,
             async_add_entities,
