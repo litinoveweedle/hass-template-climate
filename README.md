@@ -225,6 +225,9 @@ climate:
 > [!NOTE]
 > `translations/<lang>.json` files are only regenerated at Home Assistant startup, so restart Home Assistant after adding or changing `translations` configuration. Unlike `icons.json`, removing a language from your configuration does not delete its previously generated `translations/<lang>.json` file — delete it manually if needed.
 
+> [!WARNING]
+> **Known limitation:** Home Assistant preloads an integration's `translations/<lang>.json` in the background *before* this integration's own startup code runs, so there is a narrow window where Home Assistant can read the file before it has been regenerated for the current configuration. Once loaded, translations are cached in memory for the rest of that Home Assistant session and are not re-read even after we finish rewriting the file. In practice this only becomes visible right after the on-disk file was reset to a stale/placeholder state just before that particular restart (for example, immediately after updating this integration via HACS, which reinstalls the file shipped in the release). When it happens, entity/preset/state text falls back to the raw, untranslated value for that session only — icons are unaffected, since they are loaded on demand rather than preloaded at startup. **Restarting Home Assistant a second time resolves it**, since the file already holds the correct, current content by then.
+
 ## Example Configuration
 
 ```yaml
