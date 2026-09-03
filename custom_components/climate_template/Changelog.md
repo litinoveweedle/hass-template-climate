@@ -4,6 +4,11 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
+### 2026-09-03 — `0.8.1` - HA 2026.9.0 compatibility changes
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- fixes for breaking changes in the HA 2026.9.0
+
+
 ### 2026-09-02 — `0.8.0` - [PR #43](https://github.com/litinoveweedle/hass-template-climate/pull/43) — Custom icons and translations
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
