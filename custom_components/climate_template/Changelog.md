@@ -4,6 +4,12 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
+### 2026-09-10 — Fix min_temp_template/max_temp_template (and humidity) unable to widen the range
+
+- **Author:** [@mikopp](https://github.com/mikopp)
+- `_update_min_temp`/`_update_max_temp` validated the incoming template value with the same `"target_temperature"` format used for actual setpoints, which bound-checks the value against `self._attr_min_temp`/`self._attr_max_temp` — the very attribute being updated. A new `min_temp` below the entity's current `min_temp` (or a new `max_temp` above the current `max_temp`) was rejected as "out of range" against its own stale value, so `min_temp_template`/`max_temp_template` could only ever narrow the range from its initial static/default value, never widen it. `_update_min_humidity`/`_update_max_humidity` had the identical bug via `"target_humidity"`. Added dedicated `"min_max_temperature"`/`"min_max_humidity"` validation formats that parse the value without bound-checking it against itself, and switched all four callbacks to use them.
+
+
 ### 2026-09-03 — Document translations startup race limitation
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
