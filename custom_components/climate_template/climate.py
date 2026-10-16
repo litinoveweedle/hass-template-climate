@@ -792,7 +792,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_hvac_mode = Script(
                 hass,
                 self._action_hvac_mode,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,
@@ -802,7 +802,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_preset_mode = Script(
                 hass,
                 self._action_preset_mode,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,
@@ -812,7 +812,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_fan_mode = Script(
                 hass,
                 self._action_fan_mode,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,
@@ -822,7 +822,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_swing_mode = Script(
                 hass,
                 self._action_swing_mode,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,
@@ -832,7 +832,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_temperature = Script(
                 hass,
                 self._action_temperature,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,
@@ -842,7 +842,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_humidity = Script(
                 hass,
                 self._action_humidity,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,
@@ -852,7 +852,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             self._script_presets = Script(
                 hass,
                 self._action_presets,
-                self._attr_name,
+                self._attr_name or DEFAULT_NAME,
                 DOMAIN,
                 script_mode=self._attr_mode_action,
                 max_runs=self._attr_max_action,

@@ -4,7 +4,15 @@ import copy
 from unittest.mock import patch
 
 from homeassistant import config as config_util
-from homeassistant.const import EVENT_HOMEASSISTANT_START, EVENT_STATE_CHANGED
+from homeassistant.components.climate.const import (
+    ATTR_TARGET_TEMP_HIGH,
+    ATTR_TARGET_TEMP_LOW,
+)
+from homeassistant.const import (
+    ATTR_TEMPERATURE,
+    EVENT_HOMEASSISTANT_START,
+    EVENT_STATE_CHANGED,
+)
 from homeassistant.core import CoreState, HomeAssistant, State
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import mock_restore_cache
@@ -50,6 +58,57 @@ def _temp(hass: HomeAssistant):
     state = hass.states.get(ENTITY_ID)
     assert state is not None
     return state.attributes.get("current_temperature")
+
+
+async def test_target_temperature_attributes_follow_hvac_mode(
+    hass: HomeAssistant,
+) -> None:
+    """Only expose the target fields matching the active HVAC mode."""
+    entity_id = "climate.template_climate_target_mode_test"
+    config = {
+        "climate": [
+            {
+                "platform": "climate_template",
+                "name": "Template Climate Target Mode Test",
+                "unique_id": "template_climate_target_mode_test",
+                "hvac_modes": ["off", "heat", "heat_cool"],
+                "target_temperature_template": "21",
+                "target_temperature_low_template": "17",
+                "target_temperature_high_template": "22",
+            }
+        ]
+    }
+    await _setup(hass, config)
+
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes.get(ATTR_TEMPERATURE) == 21
+    assert state.attributes.get(ATTR_TARGET_TEMP_LOW) is None
+    assert state.attributes.get(ATTR_TARGET_TEMP_HIGH) is None
+
+    await hass.services.async_call(
+        "climate",
+        "set_hvac_mode",
+        {"entity_id": entity_id, "hvac_mode": "heat_cool"},
+        blocking=True,
+    )
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes.get(ATTR_TEMPERATURE) is None
+    assert state.attributes.get(ATTR_TARGET_TEMP_LOW) == 17
+    assert state.attributes.get(ATTR_TARGET_TEMP_HIGH) == 22
+
+    await hass.services.async_call(
+        "climate",
+        "set_hvac_mode",
+        {"entity_id": entity_id, "hvac_mode": "heat"},
+        blocking=True,
+    )
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes.get(ATTR_TEMPERATURE) == 21
+    assert state.attributes.get(ATTR_TARGET_TEMP_LOW) is None
+    assert state.attributes.get(ATTR_TARGET_TEMP_HIGH) is None
 
 
 async def test_initial_render_and_follow(hass: HomeAssistant) -> None:
