@@ -4,10 +4,23 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
+### 2026-09-10 — Fix min_temp_template/max_temp_template (and humidity) unable to widen the range
+
+- **Author:** [@mikopp](https://github.com/mikopp)
+- `_update_min_temp`/`_update_max_temp` validated the incoming template value with the same `"target_temperature"` format used for actual setpoints, which bound-checks the value against `self._attr_min_temp`/`self._attr_max_temp` — the very attribute being updated. A new `min_temp` below the entity's current `min_temp` (or a new `max_temp` above the current `max_temp`) was rejected as "out of range" against its own stale value, so `min_temp_template`/`max_temp_template` could only ever narrow the range from its initial static/default value, never widen it. `_update_min_humidity`/`_update_max_humidity` had the identical bug via `"target_humidity"`. Added dedicated `"min_max_temperature"`/`"min_max_humidity"` validation formats that parse the value without bound-checking it against itself, and switched all four callbacks to use them.
+- **Behavior change:** the old `"target_temperature"` format also snapped the value to the nearest `temp_step` multiple before the (buggy) bound check, so a narrowing `min_temp`/`max_temp` update was previously silently rounded (e.g. `7.3` → `7.5` with `temp_step: 0.5`). The new format does not snap to `temp_step` — bounds are not setpoints and have no reason to sit on the step grid — so `min_temp`/`max_temp` now reports the template's value exactly. `min_temp_template` and `max_temp_template` (likewise `min_humidity_template`/`max_humidity_template`) are also fully independent of each other: each is validated and applied on its own, so configuring only one side (e.g. `max_temp_template` with a static `min_temp`) works identically to configuring both.
+
+
 ### 2026-09-09 — Fix every entity's name collapsing to "Template Climate"
 
 - **Author:** [@mikopp](https://github.com/mikopp)
 - `TemplateClimate.__init__` set `self._attr_name` from the legacy `friendly_name` config key, overriding the name `TemplateEntity`'s base `__init__` had already correctly resolved from `name` (`CONF_NAME`) a few lines earlier. Since `rewrite_legacy_to_modern_config()` already rewrites `friendly_name` to `name` before the entity is constructed, `config.get(CONF_FRIENDLY_NAME)` is always `None` by this point — so every entity, regardless of its configured `name`, silently fell back to the hardcoded default `"Template Climate"`. On a fresh install this also means colliding `entity_id`s (`climate.template_climate`, `climate.template_climate_2`, ...), since Home Assistant slugs the initial `entity_id` from the display name. Removed the overriding line; `TemplateEntity.__init__` already handles both static and templated `name` correctly on its own.
+
+
+### 2026-09-09 — Fix invalid default preset/fan/swing mode on startup
+
+- **Author:** [@mikopp](https://github.com/mikopp)
+- `preset_mode`, `fan_mode`, and `swing_mode` were initialised to hardcoded defaults (`"comfort"`, `"low"`, `"off"`) without checking them against the configured `preset_modes`/`fan_modes`/`swing_modes` lists. When a configured list omitted the default, Home Assistant rejected the entity's state with `attribute 'X' returned invalid value`, and restoring it after a restart failed the same way. Each attribute now falls back to `None` when its hardcoded default isn't one of the configured values. `hvac_mode` is intentionally not reconciled: it is the entity's state, its default is always `HVACMode.OFF`, and Home Assistant already requires `off` in `hvac_modes`.
 
 
 ### 2026-09-03 — Document translations startup race limitation
