@@ -4,6 +4,13 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
+### 2026-10-16 — Fix stale templates after reload and add regression tests
+
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- `TemplateClimate.async_added_to_hass` awaited `super().async_added_to_hass()` before registering the climate-specific templates (`current_temperature_template`, etc.). When the platform is reloaded while Home Assistant is already running, the parent starts its template tracker immediately, so the later registrations were never tracked and attributes such as `current_temperature` stayed at their restored/default value. The `_async_setup_templates()` workaround did not rebuild the tracker. State restoration and all template registrations now run first and the parent `async_added_to_hass()` is called last, so every template is tracked from the start and freshly rendered values override restored ones.
+- Added a `pytest-homeassistant-custom-component` test suite (`tests/`, run with `pytest`, dependencies in `requirements_test.txt`) covering initial render, cold start, reload while running, repeated reloads, listener cleanup, changed templates on reload, `homeassistant.update_entity`, and restored state (including a restored `0` temperature).
+
+
 ### 2026-09-10 — Fix min_temp_template/max_temp_template (and humidity) unable to widen the range
 
 - **Author:** [@mikopp](https://github.com/mikopp)
