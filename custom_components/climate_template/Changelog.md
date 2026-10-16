@@ -11,6 +11,12 @@ All notable changes across all fork generations are hopefully documented here.
 - **Behavior change:** the old `"target_temperature"` format also snapped the value to the nearest `temp_step` multiple before the (buggy) bound check, so a narrowing `min_temp`/`max_temp` update was previously silently rounded (e.g. `7.3` → `7.5` with `temp_step: 0.5`). The new format does not snap to `temp_step` — bounds are not setpoints and have no reason to sit on the step grid — so `min_temp`/`max_temp` now reports the template's value exactly. `min_temp_template` and `max_temp_template` (likewise `min_humidity_template`/`max_humidity_template`) are also fully independent of each other: each is validated and applied on its own, so configuring only one side (e.g. `max_temp_template` with a static `min_temp`) works identically to configuring both.
 
 
+### 2026-09-09 — Fix invalid default preset/fan/swing mode on startup
+
+- **Author:** [@mikopp](https://github.com/mikopp)
+- `preset_mode`, `fan_mode`, and `swing_mode` were initialised to hardcoded defaults (`"comfort"`, `"low"`, `"off"`) without checking them against the configured `preset_modes`/`fan_modes`/`swing_modes` lists. When a configured list omitted the default, Home Assistant rejected the entity's state with `attribute 'X' returned invalid value`, and restoring it after a restart failed the same way. Each attribute now falls back to `None` when its hardcoded default isn't one of the configured values. `hvac_mode` is intentionally not reconciled: it is the entity's state, its default is always `HVACMode.OFF`, and Home Assistant already requires `off` in `hvac_modes`.
+
+
 ### 2026-09-03 — Document translations startup race limitation
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
