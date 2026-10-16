@@ -43,9 +43,7 @@ async def _reload(hass: HomeAssistant, config: dict = CONFIG) -> None:
     with patch.object(
         config_util, "load_yaml_config_file", return_value=copy.deepcopy(config)
     ):
-        await hass.services.async_call(
-            "climate_template", "reload", blocking=True
-        )
+        await hass.services.async_call("climate_template", "reload", blocking=True)
     await hass.async_block_till_done()
 
 
@@ -173,9 +171,9 @@ async def test_reload_cleans_up_old_listeners(hass: HomeAssistant) -> None:
     events = []
     hass.bus.async_listen(
         EVENT_STATE_CHANGED,
-        lambda event: events.append(event)
-        if event.data["entity_id"] == ENTITY_ID
-        else None,
+        lambda event: (
+            events.append(event) if event.data["entity_id"] == ENTITY_ID else None
+        ),
     )
 
     await _set_source(hass, "27")
@@ -227,9 +225,7 @@ async def test_update_entity_after_reload(hass: HomeAssistant) -> None:
 
 async def test_restored_value_overwritten_by_render(hass: HomeAssistant) -> None:
     """A rendered value wins over the restored one, on setup and reload."""
-    mock_restore_cache(
-        hass, [State(ENTITY_ID, "off", {"current_temperature": 18})]
-    )
+    mock_restore_cache(hass, [State(ENTITY_ID, "off", {"current_temperature": 18})])
     hass.states.async_set(SOURCE, "21")
     await _setup(hass)
     assert _temp(hass) == 21

@@ -23,7 +23,5 @@ def no_generated_files():
     """Keep the integration from writing icons/translations into the source tree."""
     import custom_components.climate_template  # noqa: F401
 
-    with patch(
-        "custom_components.climate_template._generate_icons_and_translations"
-    ):
+    with patch("custom_components.climate_template._generate_icons_and_translations"):
         yield
