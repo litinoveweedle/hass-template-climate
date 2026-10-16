@@ -543,6 +543,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 )
                 self._presets = {}
 
+        # Reconcile the initial preset_mode with the configured preset_modes.
+        # The hardcoded default (DEFAULT_PRESET_MODE = "comfort") is only a valid
+        # value when "comfort" is one of the configured preset_modes. Otherwise the
+        # entity would report -- and on restart try to restore -- a preset_mode
+        # that is not an allowed value, which Home Assistant rejects with
+        # "attribute 'preset_mode' returned invalid value: 'comfort'". Fall back
+        # to no preset (None) when the default is not a configured preset_mode.
+        if self._attr_preset_mode not in self._attr_preset_modes:
+            self._attr_preset_mode = None
+
         if self._attr_fan_modes and len(self._attr_fan_modes) >= 2:
             self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
             if not (
@@ -604,6 +614,21 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._attr_name,
                 )
                 self._presets_features ^= ClimateEntityPresetFeature.SWING_MODE
+
+        # Note: hvac_mode is intentionally NOT reconciled here. It is the climate
+        # entity's state and the hardcoded DEFAULT_HVAC_MODE is HVACMode.OFF, so
+        # the only way for the default to be "invalid" is for hvac_modes to omit
+        # OFF -- but such an entity is rejected by Home Assistant anyway, because
+        # the TURN_ON/TURN_OFF features are only enabled when OFF is configured.
+
+        if self._attr_fan_modes and self._attr_fan_mode not in self._attr_fan_modes:
+            self._attr_fan_mode = None
+
+        if (
+            self._attr_swing_modes
+            and self._attr_swing_mode not in self._attr_swing_modes
+        ):
+            self._attr_swing_mode = None
 
         if HVACMode.HEAT_COOL in self._attr_hvac_modes:
             if (
