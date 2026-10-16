@@ -402,7 +402,6 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         super().__init__(hass, config, unique_id)
         self._config = config
 
-        self._attr_name: str = config.get(CONF_FRIENDLY_NAME) or "Template Climate"
         self._attr_translation_key = derive_translation_key(config)
         self._attr_supported_features = ClimateEntityFeature(0)
         self._attr_temperature_unit = hass.config.units.temperature_unit
