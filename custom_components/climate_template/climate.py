@@ -1266,6 +1266,23 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         self._attr_min_temp,
                     )
                     return None
+            elif format == "min_max_temperature":
+                # Used by min_temp_template/max_temp_template: these define the
+                # allowed range itself, so (unlike "target_temperature") the new
+                # value must NOT be bound-checked against self._attr_min_temp /
+                # self._attr_max_temp -- doing so would compare the incoming
+                # min_temp/max_temp against its own stale value and reject any
+                # change that widens the range.
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer or float.",
+                        self._attr_name,
+                        attr,
+                        value,
+                    )
+                    return None
             elif format == "current_humidity":
                 try:
                     value = round(value)
@@ -1304,6 +1321,21 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                         attr,
                         value,
                         self._attr_min_humidity,
+                    )
+                    return None
+            elif format == "min_max_humidity":
+                # Used by min_humidity_template/max_humidity_template: same
+                # reasoning as "min_max_temperature" above -- these define the
+                # allowed range itself and must not be bound-checked against
+                # self._attr_min_humidity / self._attr_max_humidity.
+                try:
+                    value = round(value)
+                except (TypeError, ValueError):
+                    _LOGGER.error(
+                        "Entity '%s' attribute '%s' returned invalid value: '%s'. Expected integer of float.",
+                        self._attr_name,
+                        attr,
+                        value,
                     )
                     return None
             elif format == "precision":
@@ -1685,7 +1717,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             min_temp,
         )
         if (
-            value := self._validate_value("min_temp", min_temp, "target_temperature")
+            value := self._validate_value("min_temp", min_temp, "min_max_temperature")
         ) is not None:
             self._attr_min_temp = value
             self.async_write_ha_state()
@@ -1699,7 +1731,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
             max_temp,
         )
         if (
-            value := self._validate_value("max_temp", max_temp, "target_temperature")
+            value := self._validate_value("max_temp", max_temp, "min_max_temperature")
         ) is not None:
             self._attr_max_temp = value
             self.async_write_ha_state()
@@ -1714,7 +1746,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         if (
             value := self._validate_value(
-                "min_humidity", min_humidity, "target_humidity"
+                "min_humidity", min_humidity, "min_max_humidity"
             )
         ) is not None:
             self._attr_min_humidity = value
@@ -1730,7 +1762,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         )
         if (
             value := self._validate_value(
-                "max_humidity", max_humidity, "target_humidity"
+                "max_humidity", max_humidity, "min_max_humidity"
             )
         ) is not None:
             self._attr_max_humidity = value
