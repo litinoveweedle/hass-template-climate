@@ -404,7 +404,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
 
         self._attr_translation_key = derive_translation_key(config)
         self._attr_supported_features = ClimateEntityFeature(0)
-        self._attr_temperature_unit = hass.config.units.temperature_unit
+        self._attr_native_temperature_unit = hass.config.units.temperature_unit
         self._attr_target_temperature_step = config[CONF_TEMP_STEP]
         self._attr_mode_action = config[CONF_MODE_ACTION]
         self._attr_max_action = config[CONF_MAX_ACTION]
@@ -416,16 +416,16 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         self._attr_fan_modes = [str(item) for item in config[CONF_FAN_MODE_LIST]]
         self._attr_preset_modes = [str(item) for item in config[CONF_PRESET_MODE_LIST]]
         self._attr_swing_modes = [str(item) for item in config[CONF_SWING_MODE_LIST]]
-        self._attr_current_temperature = None
+        self._attr_native_current_temperature = None
         self._attr_current_humidity = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = DEFAULT_HVAC_MODE
         self._attr_preset_mode = DEFAULT_PRESET_MODE
         self._attr_fan_mode = DEFAULT_FAN_MODE
         self._attr_swing_mode = DEFAULT_SWING_MODE
-        self._attr_target_temperature = DEFAULT_TEMPERATURE
-        self._attr_target_temperature_low = DEFAULT_TEMPERATURE
-        self._attr_target_temperature_high = DEFAULT_TEMPERATURE
+        self._attr_native_target_temperature = DEFAULT_TEMPERATURE
+        self._attr_native_target_temperature_low = DEFAULT_TEMPERATURE
+        self._attr_native_target_temperature_high = DEFAULT_TEMPERATURE
         self._attr_target_humidity = DEFAULT_HUMIDITY
 
         self._template_hvac_action = config.get(CONF_HVAC_ACTION_TEMPLATE)
@@ -918,7 +918,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     "target_temperature",
                 )
             ) is not None:
-                self._attr_target_temperature = target_temperature
+                self._attr_native_target_temperature = target_temperature
 
             if (
                 value := previous_state.attributes.get(ATTR_TARGET_TEMP_LOW)
@@ -929,7 +929,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     "target_temperature",
                 )
             ) is not None:
-                self._attr_target_temperature_low = target_temperature_low
+                self._attr_native_target_temperature_low = target_temperature_low
 
             if (
                 value := previous_state.attributes.get(ATTR_TARGET_TEMP_HIGH)
@@ -940,7 +940,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     "target_temperature",
                 )
             ) is not None:
-                self._attr_target_temperature_high = target_temperature_high
+                self._attr_native_target_temperature_high = target_temperature_high
 
             if (value := previous_state.attributes.get(ATTR_HUMIDITY)) is not None and (
                 target_humidity := self._validate_value(
@@ -960,7 +960,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     "current_temperature",
                 )
             ) is not None:
-                self._attr_current_temperature = current_temperature
+                self._attr_native_current_temperature = current_temperature
 
             if (
                 value := previous_state.attributes.get(ATTR_CURRENT_HUMIDITY)
@@ -1669,7 +1669,7 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                 "current_temperature", current_temperature, "current_temperature"
             )
         ) is not None:
-            self._attr_current_temperature = value
+            self._attr_native_current_temperature = value
             self.async_write_ha_state()
 
     @callback
@@ -1906,26 +1906,26 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         return self._attr_hvac_mode
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the temperature we try to reach."""
         if self._attr_hvac_mode == HVACMode.HEAT_COOL:
             return None
         else:
-            return self._attr_target_temperature
+            return self._attr_native_target_temperature
 
     @property
-    def target_temperature_low(self) -> float | None:
+    def native_target_temperature_low(self) -> float | None:
         """Return the temperature we try to reach."""
         if self._attr_hvac_mode == HVACMode.HEAT_COOL:
-            return self._attr_target_temperature_low
+            return self._attr_native_target_temperature_low
         else:
             return None
 
     @property
-    def target_temperature_high(self) -> float | None:
+    def native_target_temperature_high(self) -> float | None:
         """Return the temperature we try to reach."""
         if self._attr_hvac_mode == HVACMode.HEAT_COOL:
-            return self._attr_target_temperature_high
+            return self._attr_native_target_temperature_high
         else:
             return None
 
@@ -2034,19 +2034,19 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
         """Set new target temperatures."""
         attributes: dict[str, dict[str, Any]] = {}
         if (target_temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
-            attributes["target_temperature"] = {
+            attributes["native_target_temperature"] = {
                 "attr": ATTR_TEMPERATURE,
                 "value": target_temperature,
                 "format": "target_temperature",
             }
         if (target_temperature_low := kwargs.get(ATTR_TARGET_TEMP_LOW)) is not None:
-            attributes["target_temperature_low"] = {
+            attributes["native_target_temperature_low"] = {
                 "attr": ATTR_TARGET_TEMP_LOW,
                 "value": target_temperature_low,
                 "format": "target_temperature",
             }
         if (target_temperature_high := kwargs.get(ATTR_TARGET_TEMP_HIGH)) is not None:
-            attributes["target_temperature_high"] = {
+            attributes["native_target_temperature_high"] = {
                 "attr": ATTR_TARGET_TEMP_HIGH,
                 "value": target_temperature_high,
                 "format": "target_temperature",

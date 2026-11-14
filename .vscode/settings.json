@@ -5,6 +5,7 @@
         "PATH": "../homeassistant;${env:PATH}"
     },
     "cSpell.words": [
+        "autouse",
         "hass",
         "homeassistant"
     ]
