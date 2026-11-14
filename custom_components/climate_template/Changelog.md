@@ -4,6 +4,12 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
+### 2026-11-14 — Fix Home Assistant 2026.11 climate entity deprecation warnings
+
+- **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
+- Home Assistant 2026.11 deprecated the climate entity's internal attribute naming pattern. Changed all internal climate entity attributes from `_attr_target_temperature`, `_attr_current_temperature`, `_attr_temperature_unit` to their `native_*` equivalents: `_attr_native_target_temperature`, `_attr_native_current_temperature`, `_attr_native_temperature_unit`. This is an internal implementation change; all user-facing attribute names remain unchanged. No configuration changes required; this is fully backward compatible.
+
+
 ### 2026-10-16 — Fix stale templates after reload and add regression tests
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
