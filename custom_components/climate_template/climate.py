@@ -1839,19 +1839,22 @@ class TemplateClimate(TemplateEntity, ClimateEntity, RestoreEntity):
                     self._last_on_mode[attr] = attr_data["value"]
                 # Set script variable
                 variables[attr_data["attr"]] = attr_data["value"]
-                # Update presets if defined.
+                # Preset keys omit the native_ prefix used by temperature attributes.
+                preset_attr = attr.removeprefix("native_")
                 if (
                     self._presets
                     and self._presets_features & ClimateEntityPresetFeature.EDITABLE
                     and self._attr_preset_mode in self._presets
-                    and attr in self._presets[self._attr_preset_mode]
-                    and self._presets[self._attr_preset_mode][attr]
+                    and preset_attr in self._presets[self._attr_preset_mode]
+                    and self._presets[self._attr_preset_mode][preset_attr]
                     != attr_data["value"]
                 ):
                     if self._attr_preset_mode not in presets:
                         presets[self._attr_preset_mode] = {}
-                    presets[self._attr_preset_mode][attr] = attr_data["value"]
-                    self._presets[self._attr_preset_mode][attr] = attr_data["value"]
+                    presets[self._attr_preset_mode][preset_attr] = attr_data["value"]
+                    self._presets[self._attr_preset_mode][preset_attr] = attr_data[
+                        "value"
+                    ]
 
         self.async_write_ha_state()
 
