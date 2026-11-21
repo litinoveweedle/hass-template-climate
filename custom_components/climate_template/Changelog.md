@@ -4,6 +4,11 @@ All notable changes across all fork generations are hopefully documented here.
 
 ---
 
+### 2026-11-20 — Fix editing preset temperatures
+
+- Fixed editable preset attributes not updating their stored values or invoking `set_presets` after the switch to native temperature attributes introduced in HA2026.11.
+
+
 ### 2026-11-14 — Fix Home Assistant 2026.11 climate entity deprecation warnings
 
 - **Author:** [@litinoveweedle](https://github.com/litinoveweedle)
